@@ -257,13 +257,31 @@ function buildCard(m) {
     ? `<img src="${m.foto_url}" alt="${m.nome}" class="member-photo" loading="lazy" />`
     : `<div class="member-avatar" style="--hue:${hue}" aria-hidden="true">${m.nome.charAt(0).toUpperCase()}</div>`;
 
-  const actionBtn = !isPaid
-    ? `<button class="btn-pix" data-action="pix" data-membro-id="${m.id}" aria-label="Gerar Pix para ${m.nome}">
-         <span aria-hidden="true">⚡</span> Gerar Pix
-       </button>`
-    : state.isAdmin ? `<button class="btn-unpay" data-action="despagar" data-membro-id="${m.id}" aria-label="Desfazer pagamento de ${m.nome}">
-         Desfazer pagamento
-       </button>` : `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);">✅ Já Pago</div>`;
+  let actionBtn = '';
+  if (!isPaid) {
+    if (state.isAdmin) {
+      actionBtn = `
+        <button class="btn-pix" data-action="cobrar" data-membro-id="${m.id}" style="background:var(--secondary); font-size: 0.8rem; padding: 10px 5px;" aria-label="Cobrar ${m.nome}">
+          💬 Cobrar
+        </button>
+        <button class="btn-pix" data-action="marcar-pago" data-membro-id="${m.id}" style="background:var(--success); font-size: 0.8rem; padding: 10px 5px;" aria-label="Marcar pago">
+          ✓ Pago
+        </button>
+      `;
+    } else {
+      actionBtn = `
+        <button class="btn-pix" data-action="pix" data-membro-id="${m.id}" aria-label="Gerar Pix para ${m.nome}">
+          <span aria-hidden="true">⚡</span> Gerar Pix
+        </button>
+      `;
+    }
+  } else {
+    actionBtn = state.isAdmin 
+      ? `<button class="btn-unpay" data-action="despagar" data-membro-id="${m.id}" aria-label="Desfazer pagamento de ${m.nome}">
+           Desfazer pagamento
+         </button>` 
+      : `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);">✅ Já Pago</div>`;
+  }
 
   const adminBtn = state.isAdmin ? `
     <button class="btn-remove" data-action="remover" data-membro-id="${m.id}" aria-label="Remover ${m.nome}">
@@ -286,16 +304,52 @@ function buildCard(m) {
 }
 
 // ── Delegação de eventos no grid ──────────────────────────────────────────────
-$('members-grid').addEventListener('click', e => {
-  const pix     = e.target.closest('[data-action="pix"]');
-  const unpay   = e.target.closest('[data-action="despagar"]');
-  const convite = e.target.closest('[data-action="convidar"]');
-  const remover = e.target.closest('[data-action="remover"]');
+$('members-grid').addEventListener('click', async e => {
+  const pix        = e.target.closest('[data-action="pix"]');
+  const cobrar     = e.target.closest('[data-action="cobrar"]');
+  const marcarPago = e.target.closest('[data-action="marcar-pago"]');
+  const unpay      = e.target.closest('[data-action="despagar"]');
+  const convite    = e.target.closest('[data-action="convidar"]');
+  const remover    = e.target.closest('[data-action="remover"]');
 
   if (pix) {
     const m = state.membros.find(m => m.id === parseInt(pix.dataset.membroId, 10));
     if (m) openPixModal(m);
   }
+  
+  if (marcarPago) {
+    setPago(parseInt(marcarPago.dataset.membroId, 10));
+  }
+  
+  if (cobrar) {
+    const id = parseInt(cobrar.dataset.membroId, 10);
+    const m = state.membros.find(x => x.id === id);
+    if (!m) return;
+    
+    cobrar.disabled = true;
+    cobrar.textContent = 'Gerando...';
+    
+    try {
+      const res = await fetch('/api/pix', {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ valor_centavos: m.cota }),
+      });
+      const data = await res.json();
+      if (!data.payload) throw new Error('Erro ao gerar Pix');
+      
+      const msg = `Oi ${m.nome}! A sua parte da assinatura familiar (R$ ${fmt(m.cota)}) já fechou neste mês.\n\nPix Copia e Cola:\n${data.payload}`;
+      const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+      window.open(url, '_blank');
+      
+      cobrar.textContent = '💬 Cobrar';
+      cobrar.disabled = false;
+    } catch (err) {
+      alert('Erro ao gerar cobrança: ' + err.message);
+      cobrar.textContent = '💬 Cobrar';
+      cobrar.disabled = false;
+    }
+  }
+
   if (unpay)   despagar(parseInt(unpay.dataset.membroId, 10));
   if (convite) gerarConvite(parseInt(convite.dataset.membroId, 10));
   if (remover) removerMembro(parseInt(remover.dataset.membroId, 10));
