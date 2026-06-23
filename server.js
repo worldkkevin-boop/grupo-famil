@@ -364,7 +364,8 @@ app.get('/api/status', (req, res) => {
     modo_pagamento: modoPagamento,
     vapid_public: getConfig('vapid_public', '', 1), // Vapid é global (grupo 1)
     membros: comCotas,
-    isAdmin
+    isAdmin,
+    me_id: session.membro_id
   });
 });
 

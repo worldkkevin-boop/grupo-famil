@@ -190,6 +190,7 @@ async function loadStatus() {
     state.mes     = data.mes;
     state.total   = data.total_centavos;
     state.isAdmin = data.isAdmin || false;
+    state.me_id   = data.me_id;
     
     // Configura datas do SaaS
     if (data.saas_pago_ate || data.saas_data_criacao) {
@@ -302,18 +303,28 @@ function buildCard(m) {
         </button>
       `;
     } else {
-      actionBtn = `
-        <button class="btn-pix" data-action="pix" data-membro-id="${m.id}" aria-label="Gerar Pix para ${m.nome}">
-          <span aria-hidden="true">⚡</span> Gerar Pix
-        </button>
-      `;
+      if (m.id === state.me_id) {
+        actionBtn = `
+          <button class="btn-pix" data-action="pix" data-membro-id="${m.id}" aria-label="Gerar Pix para ${m.nome}">
+            <span aria-hidden="true">⚡</span> Gerar Pix
+          </button>
+        `;
+      } else {
+        actionBtn = `<div style="flex:1;text-align:center;color:var(--text-muted);font-weight:600;padding:10px;font-size:0.8rem;">Pendente</div>`;
+      }
     }
   } else {
-    actionBtn = state.isAdmin 
-      ? `<button class="btn-unpay" data-action="despagar" data-membro-id="${m.id}" aria-label="Desfazer pagamento de ${m.nome}">
-           Desfazer pagamento
-         </button>` 
-      : `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);">✅ Já Pago</div>`;
+    if (state.isAdmin) {
+      actionBtn = `<button class="btn-unpay" data-action="despagar" data-membro-id="${m.id}" aria-label="Desfazer pagamento de ${m.nome}">
+                     Desfazer pagamento
+                   </button>`;
+    } else {
+      if (m.id === state.me_id) {
+        actionBtn = `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);">✅ Já Pago</div>`;
+      } else {
+        actionBtn = `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;font-size:0.8rem;">✅ Já Pago</div>`;
+      }
+    }
   }
 
   const adminBtn = state.isAdmin ? `
