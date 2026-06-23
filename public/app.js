@@ -525,8 +525,7 @@ $('btn-disparar-push')?.addEventListener('click', async () => {
 });
 
 // Setup Inicial
-loadStatus();
-$('btn-mark-paid').addEventListener('click', markPaid);
+$('btn-mark-paid')?.addEventListener('click', markPaid);
 
 ['modal-overlay', 'invite-overlay', 'admin-overlay'].forEach(id => {
   const el = $(id);
@@ -541,6 +540,9 @@ document.addEventListener('keydown', e => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadStatus();
-setInterval(loadStatus, 30_000);
 
-
+setInterval(() => {
+  if (localStorage.getItem('userToken')) {
+    loadStatus();
+  }
+}, 30_000);
