@@ -131,12 +131,15 @@ app.get('/api/status', (req, res) => {
   const mes = mesAtual();
   const membros    = db.prepare('SELECT * FROM membros ORDER BY id').all();
   const pagamentos = db.prepare('SELECT * FROM pagamentos WHERE mes_referencia=?').all(mes);
-  const comCotas   = calcularCotas(membros).map(m => ({
-    ...m,
-    pago: pagamentos.some(p => p.membro_id === m.id && p.pago === 1),
-  }));
   const token = extractAdminToken(req);
   const isAdmin = adminTokens.has(token);
+
+  const comCotas   = calcularCotas(membros).map(m => {
+    const isPaid = pagamentos.some(p => p.membro_id === m.id && p.pago === 1);
+    if (!isAdmin) delete m.email; // Privacidade: Oculta email para não admins
+    return { ...m, pago: isPaid };
+  });
+
   res.json({ mes, total_centavos: TOTAL_CENTAVOS, assinaturas: ASSINATURAS, membros: comCotas, isAdmin });
 });
 
@@ -154,6 +157,9 @@ app.post('/api/pix', async (req, res) => {
 
 // ── API: Pagamentos ───────────────────────────────────────────────────────────
 app.post('/api/pagar', (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
   const { membro_id } = req.body;
   const mes = mesAtual();
   const row = db.prepare('SELECT id FROM pagamentos WHERE membro_id=? AND mes_referencia=?').get(membro_id, mes);
@@ -166,6 +172,9 @@ app.post('/api/pagar', (req, res) => {
 });
 
 app.post('/api/despagar', (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
   const { membro_id } = req.body;
   const mes = mesAtual();
   db.prepare('UPDATE pagamentos SET pago=0, data_pagamento=NULL WHERE membro_id=? AND mes_referencia=?').run(membro_id, mes);

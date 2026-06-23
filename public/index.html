@@ -104,9 +104,12 @@
         <input type="text" id="pix-code" class="pix-input" readonly placeholder="Aguardando código..." aria-label="Código Pix copia e cola" />
         <button class="btn-copy" id="btn-copy">Copiar</button>
       </div>
-      <button class="btn-mark-paid" id="btn-mark-paid">
-        <span aria-hidden="true">✅</span> Marcar como Pago
+      <button class="btn-mark-paid hidden" id="btn-mark-paid">
+        <span aria-hidden="true">✅</span> Marcar como Pago (Admin)
       </button>
+      <a id="btn-send-receipt" class="btn-whatsapp hidden" href="#" target="_blank" rel="noopener noreferrer" style="margin-top: 10px;">
+        <span aria-hidden="true">📱</span> Enviar comprovante pro Admin
+      </a>
     </div>
   </div>
 

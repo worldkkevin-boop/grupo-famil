@@ -127,9 +127,9 @@ function buildCard(m) {
     ? `<button class="btn-pix" data-action="pix" data-membro-id="${m.id}" aria-label="Gerar Pix para ${m.nome}">
          <span aria-hidden="true">⚡</span> Gerar Pix
        </button>`
-    : `<button class="btn-unpay" data-action="despagar" data-membro-id="${m.id}" aria-label="Desfazer pagamento de ${m.nome}">
+    : state.isAdmin ? `<button class="btn-unpay" data-action="despagar" data-membro-id="${m.id}" aria-label="Desfazer pagamento de ${m.nome}">
          Desfazer pagamento
-       </button>`;
+       </button>` : `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);">✅ Já Pago</div>`;
 
   const adminBtn = state.isAdmin ? `
     <button class="btn-remove" data-action="remover" data-membro-id="${m.id}" aria-label="Remover ${m.nome}">
@@ -142,6 +142,7 @@ function buildCard(m) {
         ${avatarHtml}
         <div class="member-info">
           <span class="member-name">${m.nome}</span>
+          ${state.isAdmin && m.email ? `<span style="font-size:0.65rem;color:var(--text-muted);user-select:all;">${m.email}</span>` : ''}
           ${isPaid ? '<span class="paid-badge">✓ Pago</span>' : ''}
         </div>
       </div>
@@ -177,6 +178,17 @@ async function openPixModal(membro) {
   $('pix-code').value = '';
   $('btn-copy').textContent = 'Copiar';
   $('btn-copy').classList.remove('copied');
+
+  if (state.isAdmin) {
+    $('btn-mark-paid').classList.remove('hidden');
+    $('btn-send-receipt').classList.add('hidden');
+  } else {
+    $('btn-mark-paid').classList.add('hidden');
+    $('btn-send-receipt').classList.remove('hidden');
+    const waText = encodeURIComponent(`Oi Kevin, segue o comprovante do FAMIl (referente a ${mesLabel(state.mes)}). Meu nome é ${membro.nome}.`);
+    $('btn-send-receipt').href = `https://api.whatsapp.com/send?phone=5596991767788&text=${waText}`;
+  }
+
   openModal('modal-overlay');
 
   try {
