@@ -278,7 +278,39 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// ── API: Pix ──────────────────────────────────────────────────────────────────
+// ── API: Super Admin ────────────────────────────────────────────────────────
+app.get('/api/superadmin/grupos', (req, res) => {
+  const session = getSession(req);
+  if (!session || !session.is_superadmin) return res.status(403).json({ erro: 'Não autorizado' });
+
+  const grupos = db.prepare(`
+    SELECT g.*, 
+           (SELECT COUNT(*) FROM membros m WHERE m.grupo_id = g.id AND m.ativo = 1) as qte_membros 
+    FROM grupos g ORDER BY g.id DESC
+  `).all();
+  
+  res.json(grupos);
+});
+
+app.delete('/api/superadmin/grupos/:id', (req, res) => {
+  const session = getSession(req);
+  if (!session || !session.is_superadmin) return res.status(403).json({ erro: 'Não autorizado' });
+
+  const id = req.params.id;
+  
+  // Apaga dados atrelados ao grupo para manter a integridade (Cascata manual)
+  db.prepare('DELETE FROM config WHERE grupo_id=?').run(id);
+  db.prepare('DELETE FROM assinaturas WHERE grupo_id=?').run(id);
+  db.prepare('DELETE FROM pagamentos WHERE grupo_id=?').run(id);
+  db.prepare('DELETE FROM membros WHERE grupo_id=?').run(id);
+  
+  // Por fim, apaga o grupo
+  db.prepare('DELETE FROM grupos WHERE id=?').run(id);
+
+  res.json({ ok: true });
+});
+
+// ── API: Admin ──────────────────────────────────────────────────────────────────
 app.post('/api/pix', async (req, res) => {
   const session = getSession(req);
   if (!session) return res.status(401).json({ erro: 'Não autorizado' });
@@ -484,9 +516,11 @@ app.post('/api/login', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome: info.name });
+    const isSuperadmin = (info.email === 'worldkkevin@gmail.com');
     
-    res.json({ token, role, nome: info.name });
+    sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome: info.name, is_superadmin: isSuperadmin });
+    
+    res.json({ token, role, nome: info.name, is_superadmin: isSuperadmin });
   } catch (e) {
     res.status(401).json({ erro: 'Login falhou: ' + e.message });
   }

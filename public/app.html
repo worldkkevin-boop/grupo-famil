@@ -37,7 +37,13 @@
       <h2 style="margin-bottom: 8px;">Bem-vindo ao Grupo</h2>
       <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px;">Faça login para gerenciar sua assinatura e acessar o painel.</p>
 
-      <div id="universal-gsi-btn" style="display:flex; justify-content:center;"></div>
+      <div style="display:flex; gap:16px; align-items:center;">
+        <button id="btn-superadmin" class="btn-main" style="display:none; padding:8px 16px; font-size:0.85rem; border-radius:12px; background:linear-gradient(135deg, #ec4899, #8b5cf6);" onclick="abrirSuperAdmin()">
+          👑 Painel SaaS
+        </button>
+        <div id="google-btn"></div>
+        <button id="btn-sair" class="btn-secondary" style="display:none" onclick="logout()">Sair</button>
+      </div>
 
       <div id="login-error" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-top: 16px; background: rgba(248,113,113,0.1); padding: 10px; border-radius: var(--radius-sm);"></div>
     </div>
@@ -234,6 +240,19 @@
         </button>
       </div>
 
+    </div>
+  </div>
+  <!-- Modal Super Admin -->
+  <div id="modal-superadmin" class="modal">
+    <div class="modal-content" style="max-width:800px;">
+      <h2>👑 Painel Super Admin (SaaS)</h2>
+      <p style="color:var(--text-soft); font-size:0.9rem; margin-bottom:24px;">Lista de todos os clientes que criaram grupos.</p>
+      
+      <div id="lista-grupos-saas" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Grupos aparecerão aqui -->
+      </div>
+      <br>
+      <button class="btn-secondary" onclick="document.getElementById('modal-superadmin').classList.remove('active')">Fechar Painel</button>
     </div>
   </div>
 
