@@ -73,6 +73,7 @@ db.exec(`
     nome           TEXT NOT NULL,
     valor_centavos INTEGER NOT NULL,
     ativo          INTEGER DEFAULT 1,
+    mes_unico      TEXT,
     FOREIGN KEY(grupo_id) REFERENCES grupos(id)
   );
   CREATE TABLE IF NOT EXISTS config (
@@ -176,11 +177,14 @@ webpush.setVapidDetails(
 );
 
 // ── Estado Compartilhado ──────────────────────────────────────────────────────
-function getAssinaturas(grupo_id) {
-  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas WHERE ativo=1 AND grupo_id=? ORDER BY id').all(grupo_id);
+function getAssinaturas(grupo_id, mes) {
+  try { db.exec('ALTER TABLE assinaturas ADD COLUMN mes_unico TEXT'); } catch(e) {}
+  if (!mes) mes = mesAtual();
+  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas WHERE ativo=1 AND grupo_id=? AND (mes_unico IS NULL OR mes_unico=?) ORDER BY id').all(grupo_id, mes);
 }
-function getTotalCentavos(grupo_id) {
-  return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1 AND grupo_id=?').get(grupo_id).total || 0;
+function getTotalCentavos(grupo_id, mes) {
+  if (!mes) mes = mesAtual();
+  return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1 AND grupo_id=? AND (mes_unico IS NULL OR mes_unico=?)').get(grupo_id, mes).total || 0;
 }
 
 // ── Pix EMV ───────────────────────────────────────────────────────────────────
@@ -340,8 +344,8 @@ app.get('/api/status', (req, res) => {
     m.pago = isPaid;
   });
 
-  const total = getTotalCentavos(grupo_id);
-  const assinaturas = getAssinaturas(grupo_id);
+  const total = getTotalCentavos(grupo_id, mes);
+  const assinaturas = getAssinaturas(grupo_id, mes);
   const diaVencimento = getConfig('dia_vencimento', '10', grupo_id);
   const modoPagamento = getConfig('modo_pagamento', 'rateio', grupo_id);
 
@@ -788,12 +792,13 @@ function processarPagamentoSaaS(payment) {
   db.prepare('UPDATE grupos SET saas_pago_ate=?, ultima_transacao_mp=? WHERE id=?').run(baseDate.toISOString(), String(payment.id), grupo_id);
   console.log(`✅ SaaS Pago [${plano}]: Grupo ${grupo_id} renovado até ${baseDate.toISOString()}`);
   
-  // Dividir pra galera
+  // Dividir pra galera (apenas no mês atual)
+  const mes = mesAtual();
   const existing = db.prepare("SELECT id FROM assinaturas WHERE nome LIKE 'App Grupo FAMIl%' AND grupo_id=?").get(grupo_id);
   if (!existing) {
-    db.prepare("INSERT INTO assinaturas (grupo_id, nome, valor_centavos, ativo) VALUES (?, 'App Grupo FAMIl', ?, 1)").run(grupo_id, valorCentavos);
+    db.prepare("INSERT INTO assinaturas (grupo_id, nome, valor_centavos, ativo, mes_unico) VALUES (?, 'App Grupo FAMIl', ?, 1, ?)").run(grupo_id, valorCentavos, mes);
   } else {
-    db.prepare("UPDATE assinaturas SET valor_centavos=?, ativo=1 WHERE id=?").run(valorCentavos, existing.id);
+    db.prepare("UPDATE assinaturas SET valor_centavos=?, ativo=1, mes_unico=? WHERE id=?").run(valorCentavos, mes, existing.id);
   }
 }
 
