@@ -175,12 +175,12 @@ async function verificarTokenGoogle(id_token) {
   return info; // { sub, name, email, picture, ... }
 }
 
-const adminTokens = new Set();
-function extractAdminToken(req) {
+const sessionTokens = new Map(); // token -> { role: 'admin'|'member', membro_id: number|null }
+function getSession(req) {
   const auth = req.headers.authorization;
-  return (auth && auth.startsWith('Bearer ')) ? auth.split(' ')[1] : null;
+  if (!auth) return null;
+  return sessionTokens.get(auth.split(' ')[1]) || null;
 }
-
 
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(express.json());
@@ -196,16 +196,21 @@ app.get('/api/config', (_req, res) => {
 
 // ── API: Status ───────────────────────────────────────────────────────────────
 app.get('/api/status', (req, res) => {
-  const mes = mesAtual();
-  const membros    = db.prepare('SELECT * FROM membros ORDER BY id').all();
-  const pagamentos = db.prepare('SELECT * FROM pagamentos WHERE mes_referencia=?').all(mes);
-  const token = extractAdminToken(req);
-  const isAdmin = adminTokens.has(token);
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ erro: 'Não autorizado' });
 
-  const comCotas   = calcularCotas(membros).map(m => {
-    const isPaid = pagamentos.some(p => p.membro_id === m.id && p.pago === 1);
-    if (!isAdmin) delete m.email; // Privacidade: Oculta email para não admins
-    return { ...m, pago: isPaid };
+  const isAdmin = session.role === 'admin';
+  const mes = mesAtual();
+  const membros = db.prepare('SELECT id, nome, email, foto_url, ativo FROM membros').all();
+  const comCotas = calcularCotas(membros);
+
+  const pagamentos = db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all(mes);
+  const pagos = new Set(pagamentos.map(p => p.membro_id));
+
+  comCotas.forEach(m => {
+    const isPaid = pagos.has(m.id);
+    if (!isAdmin) delete m.email; // Oculta emails para não-admins
+    m.pago = isPaid;
   });
 
   const total = getTotalCentavos();
@@ -239,8 +244,8 @@ app.post('/api/pix', async (req, res) => {
 
 // ── API: Pagamentos ───────────────────────────────────────────────────────────
 app.post('/api/pagar', (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { membro_id } = req.body;
   const mes = mesAtual();
@@ -254,8 +259,8 @@ app.post('/api/pagar', (req, res) => {
 });
 
 app.post('/api/despagar', (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { membro_id } = req.body;
   const mes = mesAtual();
@@ -272,8 +277,8 @@ app.post('/api/push/subscribe', (req, res) => {
 });
 
 app.post('/api/admin/push/disparar', async (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const membros = db.prepare('SELECT id, nome, push_sub FROM membros WHERE ativo=1').all();
   // Pega quem não pagou ainda (ou todos, se precisarmos recalcular)
@@ -391,24 +396,39 @@ app.post('/api/convite/aceitar', async (req, res) => {
   res.json({ ok: true, nome, foto_url, membro_id: membro.id });
 });
 
-// ── API: Admin ────────────────────────────────────────────────────────────────
-app.post('/api/admin/login', async (req, res) => {
+// ── API: Auth (Universal Login) ────────────────────────────────────────────────
+app.post('/api/login', async (req, res) => {
   try {
     const info = await verificarTokenGoogle(req.body.google_id_token);
-    if (info.email !== ADMIN_EMAIL) {
-      return res.status(403).json({ erro: 'Acesso negado. Apenas o administrador pode logar aqui.' });
+    let role = null;
+    let membroId = null;
+
+    if (info.email === ADMIN_EMAIL) {
+      role = 'admin';
     }
+
+    const membro = db.prepare('SELECT id FROM membros WHERE email=? AND ativo=1').get(info.email);
+    if (membro) {
+      membroId = membro.id;
+      if (!role) role = 'member';
+    }
+
+    if (!role) {
+      return res.status(403).json({ erro: 'Acesso negado. Você não possui convite para este grupo.' });
+    }
+
     const token = crypto.randomBytes(32).toString('hex');
-    adminTokens.add(token);
-    res.json({ token, nome: info.name });
+    sessionTokens.set(token, { role, membro_id: membroId, nome: info.name });
+    
+    res.json({ token, role, nome: info.name });
   } catch (e) {
-    res.status(401).json({ erro: 'Login falhou' });
+    res.status(401).json({ erro: 'Login falhou: ' + e.message });
   }
 });
 
 app.post('/api/admin/remover', (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { membro_id } = req.body;
   db.prepare("UPDATE membros SET ativo=0, nome='Membro ' || id, email=NULL, foto_url=NULL, google_sub=NULL, convite_usado=0 WHERE id=?")
@@ -417,8 +437,8 @@ app.post('/api/admin/remover', (req, res) => {
 });
 
 app.post('/api/admin/assinaturas', (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { id, nome, valor_centavos } = req.body;
   if (!nome || !valor_centavos) return res.status(400).json({ erro: 'Dados inválidos' });
@@ -432,16 +452,16 @@ app.post('/api/admin/assinaturas', (req, res) => {
 });
 
 app.delete('/api/admin/assinaturas/:id', (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   db.prepare('UPDATE assinaturas SET ativo=0 WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
 app.post('/api/admin/config', (req, res) => {
-  const token = extractAdminToken(req);
-  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { dia_vencimento, modo_pagamento } = req.body;
   const upd = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor');

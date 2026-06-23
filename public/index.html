@@ -30,8 +30,38 @@
     <div class="orb orb-3"></div>
   </div>
 
-  <!-- Header -->
-  <header class="header">
+  <!-- Login View -->
+  <div id="login-view" class="login-view">
+    <div class="login-card">
+      <div class="brand-logo" style="margin: 0 auto 24px auto;">FAMIl</div>
+      <h2 style="margin-bottom: 8px;">Bem-vindo ao Grupo</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px;">Faça login para gerenciar sua assinatura e acessar o painel.</p>
+
+      <div id="g_id_onload"
+           data-client_id="845258838384-s6f1s7m9q0vsc167q80r4c44243j6tih.apps.googleusercontent.com"
+           data-context="signin"
+           data-ux_mode="popup"
+           data-callback="handleUniversalLogin"
+           data-auto_prompt="false">
+      </div>
+      <div class="g_id_signin"
+           data-type="standard"
+           data-shape="rectangular"
+           data-theme="outline"
+           data-text="signin_with"
+           data-size="large"
+           data-logo_alignment="left"
+           style="display: flex; justify-content: center;">
+      </div>
+
+      <div id="login-error" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-top: 16px; background: rgba(248,113,113,0.1); padding: 10px; border-radius: var(--radius-sm);"></div>
+    </div>
+  </div>
+
+  <!-- Dashboard View (Oculto por padrão) -->
+  <div id="dashboard-view" class="hidden">
+    <!-- Header -->
+    <header class="header">
     <div class="header-inner">
       <div class="header-brand">
         <span class="brand-icon" aria-hidden="true">👨‍👩‍👧‍👦</span>
@@ -41,7 +71,8 @@
         </div>
       </div>
       <div class="header-info">
-        <button id="btn-admin-login" class="btn-admin-icon" aria-label="Login Admin">🔒</button>
+        <button id="btn-admin-panel" class="btn-admin-icon hidden" aria-label="Gerenciar Grupo" title="Gerenciar Grupo">⚙️</button>
+        <button id="btn-logout" class="btn-admin-icon" aria-label="Sair" title="Sair do Grupo" style="font-size:0.8rem; background:rgba(248,113,113,0.1); border-color:rgba(248,113,113,0.3); color:var(--danger);">Sair</button>
         <div class="stat-pill">
           <span class="stat-label">Mês</span>
           <span class="stat-value" id="mes-ref">—</span>
@@ -80,7 +111,10 @@
       </div>
     </section>
 
+    </section>
+
   </main>
+  </div> <!-- end dashboard-view -->
 
   <!-- Modal Pix -->
   <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-member-name">
@@ -168,18 +202,6 @@
     </div>
   </div>
 
-  <!-- Modal Admin Login -->
-  <div class="modal-overlay" id="admin-overlay" role="dialog" aria-modal="true" aria-label="Login Admin">
-    <div class="modal" style="text-align: center;">
-      <button class="modal-close" id="admin-close" aria-label="Fechar modal admin">✕</button>
-      <h2 class="modal-title" style="margin-bottom: 8px;">Área Restrita</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;">
-        Apenas o administrador (worldkkevin@gmail.com) pode acessar.
-      </p>
-      <div id="admin-gsi-btn" style="display:flex; justify-content:center;"></div>
-    </div>
-  </div>
-
   <!-- Modal Admin Settings (Painel de Controle) -->
   <div class="modal-overlay" id="admin-settings-overlay" role="dialog" aria-modal="true">
     <div class="modal" style="max-width: 500px;">
@@ -231,21 +253,5 @@
   </div>
 
   <script src="app.js?v=2"></script>
-  <script>
-    document.getElementById('btn-admin-login').addEventListener('click', async () => {
-      document.getElementById('admin-overlay').classList.add('active');
-      const res = await fetch('/api/config');
-      const { google_client_id } = await res.json();
-      if (google_client_id && window.google) {
-        google.accounts.id.initialize({
-          client_id: google_client_id,
-          callback: window.handleGoogleAdminLogin,
-        });
-        google.accounts.id.renderButton(document.getElementById('admin-gsi-btn'), {
-          theme: 'filled_dark', size: 'large', shape: 'pill'
-        });
-      }
-    });
-  </script>
 </body>
 </html>

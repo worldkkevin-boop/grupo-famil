@@ -14,7 +14,7 @@ const mesLabel = mes => {
 // ── Estado ────────────────────────────────────────────────────────────────────
 let state = { membros: [], mes: '', total: 0, selectedMembro: null, isAdmin: false };
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('adminToken');
+  const token = localStorage.getItem('userToken');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
@@ -71,10 +71,49 @@ $('btn-strict-install')?.addEventListener('click', async () => {
 window.addEventListener('DOMContentLoaded', checkStandalone);
 window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
 
+// ── Universal Login ───────────────────────────────────────────────────────────
+window.handleUniversalLogin = async (response) => {
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ google_id_token: response.credential })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Falha no login');
+
+    localStorage.setItem('userToken', data.token);
+    localStorage.setItem('userRole', data.role);
+    $('login-error').classList.add('hidden');
+    loadStatus();
+  } catch (err) {
+    $('login-error').textContent = err.message;
+    $('login-error').classList.remove('hidden');
+  }
+};
+
+$('btn-logout')?.addEventListener('click', () => {
+  localStorage.removeItem('userToken');
+  localStorage.removeItem('userRole');
+  loadStatus();
+});
+
 // ── Carregar status ───────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
-    const data = await fetch('/api/status', { headers: getAuthHeaders() }).then(r => r.json());
+    const res = await fetch('/api/status', { headers: getAuthHeaders() });
+    if (res.status === 401) {
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('userRole');
+      $('login-view').classList.remove('hidden');
+      $('dashboard-view').classList.add('hidden');
+      return;
+    }
+    const data = await res.json();
+    
+    $('login-view').classList.add('hidden');
+    $('dashboard-view').classList.remove('hidden');
+
     state.membros = data.membros;
     state.mes     = data.mes;
     state.total   = data.total_centavos;
@@ -106,8 +145,7 @@ function render(data) {
   $('members-grid').innerHTML = data.membros.map(buildCard).join('');
 
   if (state.isAdmin) {
-    $('btn-admin-login').textContent = '⚙️';
-    $('btn-admin-login').title = 'Gerenciar Grupo';
+    $('btn-admin-panel').classList.remove('hidden');
 
     // Popular configs
     $('config-dia-vencimento').value = data.dia_vencimento || 10;
@@ -365,14 +403,11 @@ $('invite-close').addEventListener('click', () => closeModal('invite-overlay'));
 $('admin-close')?.addEventListener('click', () => $('admin-overlay').classList.remove('active'));
 $('admin-settings-close')?.addEventListener('click', () => $('admin-settings-overlay').classList.remove('active'));
 
-// Intercept click on btn-admin-login to open settings if already admin
-$('btn-admin-login')?.addEventListener('click', (e) => {
-  if (state.isAdmin) {
-    e.preventDefault();
-    e.stopPropagation();
-    $('admin-settings-overlay').classList.add('active');
-  }
-}, true);
+// Open admin settings
+$('btn-admin-panel')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  $('admin-settings-overlay').classList.add('active');
+});
 
 // Add assinatura
 $('btn-add-assinatura')?.addEventListener('click', async () => {
