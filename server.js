@@ -758,8 +758,9 @@ app.post('/api/saas/pagar', async (req, res) => {
     
     const qr_code_base64 = data.point_of_interaction?.transaction_data?.qr_code_base64;
     const qr_code = data.point_of_interaction?.transaction_data?.qr_code;
+    const payment_id = data.id;
     
-    res.json({ ok: true, qr_code_base64, qr_code });
+    res.json({ ok: true, qr_code_base64, qr_code, payment_id });
   } catch(err) {
     res.status(500).json({ erro: err.message });
   }
@@ -768,8 +769,9 @@ app.post('/api/saas/pagar', async (req, res) => {
 app.post('/api/saas/webhook', (req, res) => {
   res.sendStatus(200); // Responder OK para o MP imediatamente
   
-  const { type, data } = req.body;
-  if (type === 'payment' && data && data.id) {
+  const { type, action, data } = req.body;
+  const isPayment = type === 'payment' || (action && action.startsWith('payment.'));
+  if (isPayment && data && data.id) {
     fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
       headers: { 'Authorization': `Bearer ${MERCADOPAGO_ACCESS_TOKEN}` }
     }).then(r => r.json()).then(payment => {
@@ -788,6 +790,51 @@ app.post('/api/saas/webhook', (req, res) => {
         }
       }
     }).catch(err => console.error('Erro no Webhook MP:', err));
+  }
+});
+
+app.get('/api/saas/verificar/:id', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
+  try {
+    const paymentId = req.params.id;
+    const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { 'Authorization': `Bearer ${MERCADOPAGO_ACCESS_TOKEN}` }
+    });
+    const payment = await r.json();
+    
+    if (payment.status === 'approved' && payment.external_reference) {
+      const grupo_id = parseInt(payment.external_reference, 10);
+      const grupo = db.prepare('SELECT saas_pago_ate FROM grupos WHERE id=?').get(grupo_id);
+      
+      // Checa se já atualizou (para não somar duplicado no polling)
+      let atualizado = false;
+      if (grupo) {
+        let baseDate = new Date();
+        const agora = new Date();
+        if (grupo.saas_pago_ate) {
+          const current = new Date(grupo.saas_pago_ate);
+          if (current > agora) {
+            // Se já está no futuro, provavelmente o webhook já bateu
+            atualizado = true; 
+          } else {
+            baseDate = current;
+          }
+        }
+        
+        if (!atualizado) {
+          baseDate = agora;
+          baseDate.setDate(baseDate.getDate() + 30);
+          db.prepare('UPDATE grupos SET saas_pago_ate=? WHERE id=?').run(baseDate.toISOString(), grupo_id);
+          console.log(`✅ Polling MP: Grupo ${grupo_id} renovado até ${baseDate.toISOString()}`);
+        }
+      }
+    }
+    
+    res.json({ status: payment.status });
+  } catch(err) {
+    res.status(500).json({ erro: err.message });
   }
 });
 

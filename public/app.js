@@ -481,6 +481,27 @@ $('btn-saas-gerar-pix')?.addEventListener('click', async () => {
     
     btn.classList.add('hidden');
     $('saas-pix-result').classList.remove('hidden');
+    
+    // Iniciar polling
+    let pollingTries = 0;
+    const interval = setInterval(async () => {
+      try {
+        const check = await fetch(`/api/saas/verificar/${data.payment_id}`, { headers: getAuthHeaders() });
+        const checkData = await check.json();
+        
+        if (checkData.status === 'approved') {
+          clearInterval(interval);
+          alert('Pagamento aprovado! O seu grupo foi desbloqueado.');
+          location.reload();
+        } else {
+          pollingTries++;
+          if (pollingTries > 60) { // 3 minutos de timeout
+            clearInterval(interval);
+          }
+        }
+      } catch (e) { console.error('Erro no polling', e); }
+    }, 3000);
+    
   } catch (err) {
     alert(err.message);
     btn.disabled = false;
