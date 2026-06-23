@@ -1,6 +1,6 @@
 /* ── Service Worker — Grupo FAMIl ─────────────────────────────────────────── */
-const CACHE = 'famil-v4.4';
-const SHELL = ['/', '/style.css?v=4.4', '/app.js?v=4.4', '/manifest.json', '/icon.svg'];
+const CACHE = 'famil-v5.0';
+const SHELL = ['/app', '/style.css?v=5.0', '/app.js?v=5.0', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
@@ -53,7 +53,7 @@ self.addEventListener('notificationclick', e => {
       if (windowClients.length > 0) {
         windowClients[0].focus();
       } else {
-        clients.openWindow('/');
+        clients.openWindow('/app');
       }
     })
   );
