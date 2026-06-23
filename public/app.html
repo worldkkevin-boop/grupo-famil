@@ -64,8 +64,16 @@
     <div class="login-card" style="text-align:center;">
       <div style="font-size: 3rem; margin-bottom: 16px;">💳</div>
       <h2 style="margin-bottom: 8px;">Assinatura Pendente</h2>
-      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px;">O acesso ao painel está temporariamente bloqueado. Verifique com o administrador se a mensalidade do sistema foi paga.</p>
-      <button onclick="location.reload()" class="btn-main" style="width:100%; padding:12px; border-radius:8px;">Verificar novamente</button>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 24px;">O acesso ao painel está temporariamente bloqueado. Verifique com o administrador se a mensalidade do sistema foi paga.</p>
+      
+      <div id="saas-billing-info" class="hidden" style="background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; margin-bottom: 24px; text-align: left;">
+        <p style="font-size: 0.85rem; color: var(--text); margin-bottom: 8px;">Você é o administrador. Efetue o pagamento da mensalidade (R$ 4,90):</p>
+        <textarea id="saas-pix-code" readonly style="width: 100%; height: 60px; background: var(--bg); border: 1px solid var(--border); color: var(--success); padding: 8px; border-radius: 8px; font-size: 0.8rem; resize: none; margin-bottom: 8px;">00020126460014br.gov.bcb.pix0111017491322220215Assinatura FAMIl52040000530398654044.905802BR5914KEVIN SCHWNAKE6016LARANJAL DO JARI62070503***6304FC76</textarea>
+        <button id="btn-copy-saas-pix" class="btn-main" style="width: 100%; padding: 10px; font-weight: 600;">Copiar Chave Pix</button>
+      </div>
+
+      <button onclick="location.reload()" class="btn-main" style="width:100%; padding:12px; border-radius:8px; margin-bottom: 16px;">Verificar novamente</button>
+      <button onclick="localStorage.removeItem('userToken'); localStorage.removeItem('userRole'); location.reload();" style="background: none; border: none; color: var(--text-muted); text-decoration: underline; cursor: pointer; font-size: 0.85rem;">Sair / Trocar de Conta</button>
     </div>
   </div>
 
@@ -267,6 +275,6 @@
   </div>
 
 
-  <script src="app.js?v=6.8"></script>
+  <script src="app.js?v=6.9"></script>
 </body>
 </html>

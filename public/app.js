@@ -171,6 +171,11 @@ async function loadStatus() {
     if (data.saas_bloqueado) {
       $('login-view').classList.add('hidden');
       $('dashboard-view').classList.add('hidden');
+      if (data.isAdmin) {
+        $('saas-billing-info').classList.remove('hidden');
+      } else {
+        $('saas-billing-info').classList.add('hidden');
+      }
       $('saas-blocked-view').classList.remove('hidden');
       return;
     }
