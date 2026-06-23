@@ -108,7 +108,7 @@ webpush.setVapidDetails(
 
 // ── Estado Compartilhado ──────────────────────────────────────────────────────
 function getAssinaturas() {
-  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas ORDER BY id').all();
+  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas WHERE ativo=1 ORDER BY id').all();
 }
 function getTotalCentavos() {
   return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1').get().total || 0;
