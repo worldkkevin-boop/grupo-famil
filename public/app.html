@@ -49,9 +49,6 @@
 
       <div style="display:flex; flex-direction:column; gap:16px; align-items:center;">
         <div id="universal-gsi-btn"></div>
-        <button id="btn-superadmin" class="btn-main" style="display:none; padding:8px 16px; font-size:0.85rem; border-radius:12px; background:linear-gradient(135deg, #ec4899, #8b5cf6);" onclick="abrirSuperAdmin()">
-          👑 Painel SaaS
-        </button>
       </div>
 
       <div id="login-error" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-top: 16px; background: rgba(248,113,113,0.1); padding: 10px; border-radius: var(--radius-sm); text-align:center;"></div>
@@ -75,6 +72,7 @@
         </div>
       </div>
       <div class="header-info">
+        <button id="btn-superadmin" class="btn-admin-icon" style="display:none; padding:0 12px; font-size:0.85rem; background:linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff;" onclick="abrirSuperAdmin()">👑 SaaS</button>
         <button id="btn-admin-panel" class="btn-admin-icon hidden" aria-label="Gerenciar Grupo" title="Gerenciar Grupo">⚙️</button>
         <button id="btn-logout" class="btn-admin-icon" aria-label="Sair" title="Sair do Grupo" style="font-size:0.8rem; background:rgba(248,113,113,0.1); border-color:rgba(248,113,113,0.3); color:var(--danger);">Sair</button>
         <div class="stat-pill">
@@ -269,6 +267,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=6.0"></script>
+  <script src="app.js?v=6.1"></script>
 </body>
 </html>
