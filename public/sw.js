@@ -1,5 +1,5 @@
 /* ── Service Worker — Grupo FAMIl ─────────────────────────────────────────── */
-const CACHE = 'famil-v3.1';
+const CACHE = 'famil-v3.2';
 const SHELL = ['/', '/style.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {

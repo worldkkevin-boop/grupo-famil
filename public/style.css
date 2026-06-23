@@ -558,7 +558,7 @@ body {
   .modal { padding: 24px 20px; width: calc(100% - 32px); }
   .modal-amount { font-size: 1.7rem; }
 }
-@media (max-width: 400px) {
+@media (max-width: 500px) {
   .members-grid { grid-template-columns: 1fr; }
 }
 
