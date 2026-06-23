@@ -42,7 +42,7 @@ db.exec(`
 const { cnt } = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
 if (cnt === 0) {
   const ins = db.prepare('INSERT INTO membros (nome) VALUES (?)');
-  ['Kevin', 'Gaby', 'Bode', 'Membro 4', 'Membro 5', 'Membro 6', 'Membro 7']
+  ['Kevin', 'Gaby', 'Bode', 'Membro 4', 'Membro 5', 'Membro 6']
     .forEach(n => ins.run(n));
   console.log('✅  Membros iniciais inseridos.');
 }
