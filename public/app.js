@@ -104,6 +104,29 @@ function render(data) {
   `).join('');
 
   $('members-grid').innerHTML = data.membros.map(buildCard).join('');
+
+  if (state.isAdmin) {
+    $('btn-admin-login').textContent = '⚙️';
+    $('btn-admin-login').title = 'Gerenciar Grupo';
+
+    // Popular configs
+    $('config-dia-vencimento').value = data.dia_vencimento || 10;
+    
+    // Select de pagador
+    let opts = `<option value="rateio" ${data.modo_pagamento === 'rateio' ? 'selected' : ''}>Todos (Rateio)</option>`;
+    ativos.forEach(m => {
+      opts += `<option value="${m.id}" ${String(data.modo_pagamento) === String(m.id) ? 'selected' : ''}>${m.nome} paga tudo</option>`;
+    });
+    $('config-modo-pagamento').innerHTML = opts;
+
+    // Lista de assinaturas
+    $('admin-assinaturas-list').innerHTML = data.assinaturas.map(a => `
+      <li style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:8px;">
+        <span style="font-size:0.85rem; color:var(--text);">${a.nome} - <strong style="color:var(--primary);">${fmt(a.valor)}</strong></span>
+        <button class="btn-del-assinatura" data-id="${a.id}" style="background:none; border:none; color:var(--danger); cursor:pointer;">🗑️</button>
+      </li>
+    `).join('');
+  }
 }
 
 // ── Construir card ────────────────────────────────────────────────────────────
@@ -305,7 +328,7 @@ async function removerMembro(membro_id) {
   }
 }
 
-window.handleGoogleAdminLogin = async function(response) {
+window.handleGoogleAdminLogin = async (response) => {
   try {
     const res = await fetch('/api/admin/login', {
       method: 'POST',
@@ -313,14 +336,16 @@ window.handleGoogleAdminLogin = async function(response) {
       body: JSON.stringify({ google_id_token: response.credential })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.erro);
-    localStorage.setItem('adminToken', data.token);
-    closeModal('admin-overlay');
-    await loadStatus();
-    alert('Admin logado com sucesso!');
-  } catch (err) {
-    alert(err.message || 'Erro no login admin');
-  }
+    if (res.ok) {
+      localStorage.setItem('adminToken', data.token);
+      alert(`Bem-vindo, Admin ${data.nome}!`);
+      $('admin-overlay').classList.remove('active');
+      await loadStatus();
+      $('admin-settings-overlay').classList.add('active'); // Abre config direto
+    } else {
+      alert(data.erro);
+    }
+  } catch { alert('Erro no login admin'); }
 };
 
 
@@ -337,7 +362,80 @@ function closeModal(id) {
 
 $('modal-close').addEventListener('click', () => closeModal('modal-overlay'));
 $('invite-close').addEventListener('click', () => closeModal('invite-overlay'));
-$('admin-close')?.addEventListener('click', () => closeModal('admin-overlay'));
+$('admin-close')?.addEventListener('click', () => $('admin-overlay').classList.remove('active'));
+$('admin-settings-close')?.addEventListener('click', () => $('admin-settings-overlay').classList.remove('active'));
+
+// Intercept click on btn-admin-login to open settings if already admin
+$('btn-admin-login')?.addEventListener('click', (e) => {
+  if (state.isAdmin) {
+    e.preventDefault();
+    e.stopPropagation();
+    $('admin-settings-overlay').classList.add('active');
+  }
+}, true);
+
+// Add assinatura
+$('btn-add-assinatura')?.addEventListener('click', async () => {
+  const nome = $('nova-assinatura-nome').value.trim();
+  const valor = parseFloat($('nova-assinatura-valor').value);
+  if (!nome || !valor) return alert('Preencha nome e valor');
+  const valor_centavos = Math.round(valor * 100);
+  
+  await fetch('/api/admin/assinaturas', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ nome, valor_centavos })
+  });
+  $('nova-assinatura-nome').value = '';
+  $('nova-assinatura-valor').value = '';
+  loadStatus();
+});
+
+// Delete assinatura
+$('admin-assinaturas-list')?.addEventListener('click', async (e) => {
+  if (e.target.closest('.btn-del-assinatura')) {
+    const id = e.target.closest('.btn-del-assinatura').dataset.id;
+    if (confirm('Remover essa assinatura?')) {
+      await fetch(`/api/admin/assinaturas/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      loadStatus();
+    }
+  }
+});
+
+// Save configs
+$('btn-save-config')?.addEventListener('click', async () => {
+  const dia_vencimento = $('config-dia-vencimento').value;
+  const modo_pagamento = $('config-modo-pagamento').value;
+  await fetch('/api/admin/config', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ dia_vencimento, modo_pagamento })
+  });
+  alert('Configurações salvas!');
+  loadStatus();
+});
+
+// Disparar Push
+$('btn-disparar-push')?.addEventListener('click', async () => {
+  if (!confirm('Disparar notificação de cobrança para quem ainda não pagou?')) return;
+  const btn = $('btn-disparar-push');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  
+  try {
+    const res = await fetch('/api/admin/push/disparar', { method: 'POST', headers: getAuthHeaders() });
+    const data = await res.json();
+    alert(`Enviado para ${data.enviados} membro(s).`);
+  } catch {
+    alert('Erro ao enviar push');
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '🔔 Disparar Cobrança Agora';
+});
+
+// Setup Inicial
+loadStatus();
 $('btn-mark-paid').addEventListener('click', markPaid);
 
 ['modal-overlay', 'invite-overlay', 'admin-overlay'].forEach(id => {

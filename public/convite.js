@@ -74,7 +74,9 @@ async function handleGoogleCredential(response) {
       return;
     }
 
+    localStorage.setItem('meuMembroId', data.membro_id);
     showSuccess(data.nome, data.foto_url);
+    askForPush();
   } catch {
     showState('state-form');
     alert('Erro de conexão. Tente novamente.');
@@ -114,7 +116,9 @@ function setupManualForm() {
         $('btn-submit').textContent = 'Entrar no grupo →';
         return;
       }
+      localStorage.setItem('meuMembroId', data.membro_id);
       showSuccess(data.nome, null);
+      askForPush();
     } catch {
       showState('state-form');
       $('btn-submit').disabled    = false;
@@ -139,6 +143,32 @@ function showSuccess(nome, fotoUrl) {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+}
+
+// ── Notificações Push ─────────────────────────────────────────────────────────
+async function askForPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return;
+
+  const sw = await navigator.serviceWorker.ready;
+  const res = await fetch('/api/config');
+  const { vapid_public } = await res.json();
+  if (!vapid_public) return;
+
+  const sub = await sw.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: vapid_public
+  });
+
+  const membro_id = localStorage.getItem('meuMembroId');
+  if (membro_id) {
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ membro_id, sub })
+    });
   }
 }
 

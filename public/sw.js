@@ -1,5 +1,5 @@
 /* ── Service Worker — Grupo FAMIl ─────────────────────────────────────────── */
-const CACHE = 'famil-v3.2';
+const CACHE = 'famil-v3.3';
 const SHELL = ['/', '/style.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -25,5 +25,36 @@ self.addEventListener('fetch', e => {
   // App shell: cache-first
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
+});
+
+// ── Push Notifications ────────────────────────────────────────────────────────
+self.addEventListener('push', e => {
+  if (!e.data) return;
+  try {
+    const data = e.data.json();
+    e.waitUntil(
+      self.registration.showNotification(data.title || 'Grupo FAMIl', {
+        body: data.body,
+        icon: data.icon || '/icon.svg',
+        badge: '/icon.svg',
+        vibrate: [200, 100, 200]
+      })
+    );
+  } catch (err) {
+    console.error('Erro no push', err);
+  }
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window' }).then(windowClients => {
+      if (windowClients.length > 0) {
+        windowClients[0].focus();
+      } else {
+        clients.openWindow('/');
+      }
+    })
   );
 });

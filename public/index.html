@@ -37,7 +37,7 @@
         <span class="brand-icon" aria-hidden="true">👨‍👩‍👧‍👦</span>
         <div>
           <h1 class="brand-title">Grupo FAMIl</h1>
-          <p class="brand-sub">Assinaturas Compartilhadas <span style="opacity: 0.5;">(v3.2)</span></p>
+          <p class="brand-sub">Assinaturas Compartilhadas <span style="opacity: 0.5;">(v3.3)</span></p>
         </div>
       </div>
       <div class="header-info">
@@ -168,7 +168,7 @@
     </div>
   </div>
 
-  <!-- Modal Admin -->
+  <!-- Modal Admin Login -->
   <div class="modal-overlay" id="admin-overlay" role="dialog" aria-modal="true" aria-label="Login Admin">
     <div class="modal" style="text-align: center;">
       <button class="modal-close" id="admin-close" aria-label="Fechar modal admin">✕</button>
@@ -177,6 +177,56 @@
         Apenas o administrador (worldkkevin@gmail.com) pode acessar.
       </p>
       <div id="admin-gsi-btn" style="display:flex; justify-content:center;"></div>
+    </div>
+  </div>
+
+  <!-- Modal Admin Settings (Painel de Controle) -->
+  <div class="modal-overlay" id="admin-settings-overlay" role="dialog" aria-modal="true">
+    <div class="modal" style="max-width: 500px;">
+      <button class="modal-close" id="admin-settings-close">✕</button>
+      <h2 class="modal-title" style="margin-bottom: 24px;">⚙️ Gerenciar Grupo</h2>
+      
+      <!-- Assinaturas -->
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text);">Assinaturas do Mês</h3>
+        <ul id="admin-assinaturas-list" style="list-style:none; display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></ul>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="nova-assinatura-nome" placeholder="Ex: Spotify" style="flex:2; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff;">
+          <input type="number" id="nova-assinatura-valor" placeholder="R$ 0,00" step="0.01" style="flex:1; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff;">
+          <button id="btn-add-assinatura" class="btn-main" style="padding:10px 16px; border-radius:8px;">＋</button>
+        </div>
+      </div>
+
+      <!-- Configurações (Vencimento / Quem Paga) -->
+      <div style="margin-bottom: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+        <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text);">Configurações</h3>
+        
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <label style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;">
+            Dia do Vencimento:
+            <input type="number" id="config-dia-vencimento" min="1" max="31" style="width:60px; padding:8px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff; text-align:center;">
+          </label>
+
+          <label style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;">
+            Pagador do Mês:
+            <select id="config-modo-pagamento" style="padding:8px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff; max-width: 150px;">
+              <option value="rateio">Todos (Rateio)</option>
+              <!-- Preenchido via JS com os membros ativos -->
+            </select>
+          </label>
+        </div>
+        <button id="btn-save-config" class="btn-main" style="width:100%; padding:12px; border-radius:8px; margin-top:16px;">Salvar Configurações</button>
+      </div>
+
+      <!-- Notificações -->
+      <div style="padding-top: 24px; border-top: 1px solid var(--border);">
+        <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text);">Notificações Push</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Envia um lembrete de cobrança para o celular de todos que ainda não pagaram.</p>
+        <button id="btn-disparar-push" style="width:100%; padding:12px; background:rgba(248,113,113,0.1); color:var(--danger); border:1px dashed var(--danger); border-radius:8px; cursor:pointer; font-weight:600;">
+          🔔 Disparar Cobrança Agora
+        </button>
+      </div>
+
     </div>
   </div>
 

@@ -16,14 +16,7 @@ const PIX_KEY  = process.env.PIX_KEY  || '01749132222';
 const PIX_NAME = process.env.PIX_NAME || 'KEVIN SCHWNAKE';
 const PIX_CITY = process.env.PIX_CITY || 'LARANJAL DO JARI';
 
-// ── Assinaturas (centavos) ────────────────────────────────────────────────────
-const ASSINATURAS = [
-  { nome: 'Google AI Pro 5TB',       valor: 4849 },
-  { nome: 'YouTube Premium Família', valor: 5390 },
-];
-const TOTAL_CENTAVOS = ASSINATURAS.reduce((s, a) => s + a.valor, 0);
-
-// ── Banco de Dados ────────────────────────────────────────────────────────────
+// ── Banco de Dados e Migrations ───────────────────────────────────────────────
 const db = new DatabaseSync(path.join(__dirname, 'grupo-famil.db'));
 
 db.exec(`
@@ -40,6 +33,16 @@ db.exec(`
     data_pagamento TEXT,
     FOREIGN KEY(membro_id) REFERENCES membros(id)
   );
+  CREATE TABLE IF NOT EXISTS assinaturas (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome           TEXT NOT NULL,
+    valor_centavos INTEGER NOT NULL,
+    ativo          INTEGER DEFAULT 1
+  );
+  CREATE TABLE IF NOT EXISTS config (
+    chave          TEXT PRIMARY KEY,
+    valor          TEXT NOT NULL
+  );
 `);
 
 // Migrations seguras
@@ -51,13 +54,53 @@ for (const col of [
   'ALTER TABLE membros ADD COLUMN google_sub TEXT',
 ]) { try { db.exec(col); } catch {} }
 
-// Seed inicial
-const { cnt } = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
-if (cnt === 0) {
+// Seed inicial: membros
+const { cntMembros } = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
+if (cntMembros === 0) {
   const ins = db.prepare('INSERT INTO membros (nome, ativo) VALUES (?, ?)');
   [['Kevin',1],['Gaby',1],['Membro 3',0],['Membro 4',0],['Membro 5',0],['Membro 6',0]]
     .forEach(([n, a]) => ins.run(n, a));
   console.log('✅  Membros iniciais inseridos.');
+}
+
+// Seed inicial: assinaturas
+const { cntAssinaturas } = db.prepare('SELECT COUNT(*) as cnt FROM assinaturas').get();
+if (cntAssinaturas === 0) {
+  const ins = db.prepare('INSERT INTO assinaturas (nome, valor_centavos, ativo) VALUES (?, ?, 1)');
+  ins.run('Google AI Pro 5TB', 4849);
+  ins.run('YouTube Premium Família', 5390);
+  console.log('✅  Assinaturas iniciais inseridas.');
+}
+
+// Seed inicial: config
+const { cntConfig } = db.prepare('SELECT COUNT(*) as cnt FROM config').get();
+if (cntConfig === 0) {
+  const vapidKeys = webpush.generateVAPIDKeys();
+  const ins = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?)');
+  ins.run('dia_vencimento', '10');
+  ins.run('modo_pagamento', 'rateio'); // 'rateio' ou ID do membro (ex: '3')
+  ins.run('vapid_public', vapidKeys.publicKey);
+  ins.run('vapid_private', vapidKeys.privateKey);
+  console.log('✅  Configurações iniciais e VAPID Keys inseridas.');
+}
+
+// Configurar Web Push
+webpush.setVapidDetails(
+  `mailto:${ADMIN_EMAIL || 'admin@localhost'}`,
+  getConfig('vapid_public', ''),
+  getConfig('vapid_private', '')
+);
+
+// ── Estado Compartilhado ──────────────────────────────────────────────────────
+function getAssinaturas() {
+  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas ORDER BY id').all();
+}
+function getTotalCentavos() {
+  return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1').get().total || 0;
+}
+function getConfig(chave, padrao) {
+  const row = db.prepare('SELECT valor FROM config WHERE chave=?').get(chave);
+  return row ? row.valor : padrao;
 }
 
 // ── Pix EMV ───────────────────────────────────────────────────────────────────
@@ -86,11 +129,25 @@ function gerarPix(centavos) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function mesAtual() { return new Date().toISOString().slice(0, 7); }
 function calcularCotas(membros) {
+  const total = getTotalCentavos();
+  const modo = getConfig('modo_pagamento', 'rateio');
+
+  if (modo !== 'rateio') {
+    // Modo "Mês Cheio" - Alguém paga tudo sozinho
+    const pagadorId = parseInt(modo, 10);
+    return membros.map(m => {
+      if (!m.ativo) return { ...m, cota: 0 };
+      if (m.id === pagadorId) return { ...m, cota: total };
+      return { ...m, cota: 0 };
+    });
+  }
+
+  // Modo Rateio (Divide pelo número de ativos)
   const ativos = membros.filter(m => m.ativo);
   const n = ativos.length;
   if (!n) return membros.map(m => ({ ...m, cota: 0 }));
-  const base = Math.floor(TOTAL_CENTAVOS / n);
-  const extra = TOTAL_CENTAVOS % n;
+  const base = Math.floor(total / n);
+  const extra = total % n;
   let idx = 0;
   return membros.map(m => {
     if (!m.ativo) return { ...m, cota: 0 };
@@ -140,7 +197,21 @@ app.get('/api/status', (req, res) => {
     return { ...m, pago: isPaid };
   });
 
-  res.json({ mes, total_centavos: TOTAL_CENTAVOS, assinaturas: ASSINATURAS, membros: comCotas, isAdmin });
+  const total = getTotalCentavos();
+  const assinaturas = getAssinaturas();
+  const diaVencimento = getConfig('dia_vencimento', '10');
+  const modoPagamento = getConfig('modo_pagamento', 'rateio');
+
+  res.json({
+    mes,
+    total_centavos: total,
+    assinaturas,
+    dia_vencimento: diaVencimento,
+    modo_pagamento: modoPagamento,
+    vapid_public: getConfig('vapid_public', ''),
+    membros: comCotas,
+    isAdmin
+  });
 });
 
 // ── API: Pix ──────────────────────────────────────────────────────────────────
@@ -180,6 +251,82 @@ app.post('/api/despagar', (req, res) => {
   db.prepare('UPDATE pagamentos SET pago=0, data_pagamento=NULL WHERE membro_id=? AND mes_referencia=?').run(membro_id, mes);
   res.json({ ok: true });
 });
+
+// ── API: Push Notifications ───────────────────────────────────────────────────
+app.post('/api/push/subscribe', (req, res) => {
+  const { membro_id, sub } = req.body;
+  if (!membro_id || !sub) return res.status(400).json({ erro: 'Dados inválidos' });
+  db.prepare('UPDATE membros SET push_sub=? WHERE id=?').run(JSON.stringify(sub), membro_id);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/push/disparar', async (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
+  const membros = db.prepare('SELECT id, nome, push_sub FROM membros WHERE ativo=1').all();
+  // Pega quem não pagou ainda (ou todos, se precisarmos recalcular)
+  const mes = mesAtual();
+  const pagamentos = new Set(
+    db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all().map(p => p.membro_id)
+  );
+
+  let enviados = 0;
+  for (const m of membros) {
+    if (pagamentos.has(m.id)) continue; // Já pagou
+    if (!m.push_sub) continue; // Não tem celular cadastrado
+
+    const payload = JSON.stringify({
+      title: 'Fatura do Grupo FAMIl',
+      body: `Oi ${m.nome}, a fatura de ${mes} já fechou! Abra o app para gerar o Pix.`,
+      icon: '/icon.svg'
+    });
+
+    try {
+      await webpush.sendNotification(JSON.parse(m.push_sub), payload);
+      enviados++;
+    } catch (err) {
+      console.error(`Erro ao enviar push para ${m.nome}:`, err);
+      if (err.statusCode === 410) {
+        db.prepare('UPDATE membros SET push_sub=NULL WHERE id=?').run(m.id);
+      }
+    }
+  }
+
+  res.json({ ok: true, enviados });
+});
+
+// Cron Job: Disparo Automático no dia do vencimento (Roda a cada 6 horas)
+setInterval(async () => {
+  const diaVencimento = parseInt(getConfig('dia_vencimento', '10'), 10);
+  const hoje = new Date().getDate();
+  if (hoje !== diaVencimento) return;
+
+  const membros = db.prepare('SELECT id, nome, push_sub FROM membros WHERE ativo=1 AND push_sub IS NOT NULL').all();
+  if (!membros.length) return;
+
+  const mes = mesAtual();
+  const pagamentos = new Set(
+    db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all().map(p => p.membro_id)
+  );
+
+  const payload = JSON.stringify({
+    title: 'Fatura do Grupo FAMIl',
+    body: `Sua fatura de ${mes} vence hoje! Abra o app para pagar.`,
+    icon: '/icon.svg'
+  });
+
+  for (const m of membros) {
+    if (pagamentos.has(m.id)) continue;
+    try {
+      await webpush.sendNotification(JSON.parse(m.push_sub), payload);
+    } catch (err) {
+      if (err.statusCode === 410) {
+        db.prepare('UPDATE membros SET push_sub=NULL WHERE id=?').run(m.id);
+      }
+    }
+  }
+}, 6 * 60 * 60 * 1000);
 
 // ── API: Convites ─────────────────────────────────────────────────────────────
 app.post('/api/convite/gerar', (req, res) => {
@@ -230,7 +377,7 @@ app.post('/api/convite/aceitar', async (req, res) => {
   db.prepare('UPDATE membros SET nome=?, email=?, foto_url=?, google_sub=?, ativo=1, convite_usado=1 WHERE id=?')
     .run(nome, email, foto_url, google_sub, membro.id);
 
-  res.json({ ok: true, nome, foto_url });
+  res.json({ ok: true, nome, foto_url, membro_id: membro.id });
 });
 
 // ── API: Admin ────────────────────────────────────────────────────────────────
@@ -258,7 +405,43 @@ app.post('/api/admin/remover', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
+app.post('/api/admin/assinaturas', (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
+  const { id, nome, valor_centavos } = req.body;
+  if (!nome || !valor_centavos) return res.status(400).json({ erro: 'Dados inválidos' });
+
+  if (id) {
+    db.prepare('UPDATE assinaturas SET nome=?, valor_centavos=? WHERE id=?').run(nome, valor_centavos, id);
+  } else {
+    db.prepare('INSERT INTO assinaturas (nome, valor_centavos, ativo) VALUES (?, ?, 1)').run(nome, valor_centavos);
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/assinaturas/:id', (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
+  db.prepare('UPDATE assinaturas SET ativo=0 WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/config', (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
+  const { dia_vencimento, modo_pagamento } = req.body;
+  const upd = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor');
+  
+  if (dia_vencimento !== undefined) upd.run('dia_vencimento', dia_vencimento);
+  if (modo_pagamento !== undefined) upd.run('modo_pagamento', modo_pagamento);
+
+  res.json({ ok: true });
+});
+
+// ── Fallback ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () =>
   console.log(`✅  Grupo-FAMIl → ${BASE_URL}  |  mês: ${mesAtual()}`)
 );
