@@ -284,7 +284,7 @@ app.post('/api/admin/push/disparar', async (req, res) => {
   // Pega quem não pagou ainda (ou todos, se precisarmos recalcular)
   const mes = mesAtual();
   const pagamentos = new Set(
-    db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all().map(p => p.membro_id)
+    db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all(mes).map(p => p.membro_id)
   );
 
   let enviados = 0;

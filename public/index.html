@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=4.3" />
+  <link rel="stylesheet" href="style.css?v=4.4" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -198,9 +198,9 @@
         <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text);">Assinaturas do Mês</h3>
         <ul id="admin-assinaturas-list" style="list-style:none; display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></ul>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="nova-assinatura-nome" placeholder="Ex: Spotify" style="flex:2; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff;">
-          <input type="number" id="nova-assinatura-valor" placeholder="R$ 0,00" step="0.01" style="flex:1; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff;">
-          <button id="btn-add-assinatura" class="btn-main" style="padding:10px 16px; border-radius:8px;">＋</button>
+          <input type="text" id="nova-assinatura-nome" placeholder="Ex: Spotify" style="flex:2; min-width:0; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff;">
+          <input type="number" id="nova-assinatura-valor" placeholder="R$ 0,00" step="0.01" style="flex:1; min-width:0; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff;">
+          <button id="btn-add-assinatura" class="btn-main" style="padding:10px 16px; border-radius:8px; flex-shrink:0;">＋</button>
         </div>
       </div>
 
@@ -237,6 +237,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=4.3"></script>
+  <script src="app.js?v=4.4"></script>
 </body>
 </html>
