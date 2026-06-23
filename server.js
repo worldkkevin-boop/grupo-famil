@@ -253,6 +253,7 @@ function getSession(req) {
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
 app.get('/convite/:token', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'convite.html'))
 );
