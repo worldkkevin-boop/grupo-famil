@@ -326,7 +326,7 @@ async function openPixModal(membro) {
 
   try {
     const res  = await fetch('/api/pix', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: getAuthHeaders(),
       body: JSON.stringify({ valor_centavos: membro.cota }),
     });
     const data = await res.json();
@@ -346,7 +346,7 @@ async function gerarConvite(membro_id) {
 
   try {
     const res  = await fetch('/api/convite/gerar', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: getAuthHeaders(),
       body: JSON.stringify({ membro_id }),
     });
     const data = await res.json();
@@ -386,11 +386,10 @@ $('btn-copy').addEventListener('click', () => copyText('pix-code', 'btn-copy'));
 $('btn-copy-invite').addEventListener('click', () => copyText('invite-link-input', 'btn-copy-invite'));
 
 // ── Marcar pago ───────────────────────────────────────────────────────────────
-async function markPaid() {
-  if (!state.selectedMembro) return;
+async function setPago(id) {
   await fetch('/api/pagar', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ membro_id: state.selectedMembro.id }),
+    method: 'POST', headers: getAuthHeaders(),
+    body: JSON.stringify({ membro_id: id })
   });
   closeModal('modal-overlay');
   await loadStatus();
@@ -400,7 +399,7 @@ async function despagar(membro_id) {
   const m = state.membros.find(m => m.id === membro_id);
   if (!confirm(`Desfazer pagamento de ${m?.nome ?? 'membro'}?`)) return;
   await fetch('/api/despagar', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    method: 'POST', headers: getAuthHeaders(),
     body: JSON.stringify({ membro_id }),
   });
   await loadStatus();
@@ -413,7 +412,7 @@ async function removerMembro(membro_id) {
   try {
     const res = await fetch('/api/admin/remover', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ membro_id })
     });
     const data = await res.json();
@@ -452,14 +451,29 @@ $('btn-add-assinatura')?.addEventListener('click', async () => {
   const valor = parseFloat($('nova-assinatura-valor').value);
   if (!nome || !valor) return alert('Preencha nome e valor');
   const valor_centavos = Math.round(valor * 100);
-  
+  $('btn-add-assinatura').disabled = true;
   await fetch('/api/admin/assinaturas', {
-    method: 'POST',
-    headers: getAuthHeaders(),
+    method: 'POST', headers: getAuthHeaders(),
     body: JSON.stringify({ nome, valor_centavos })
   });
+  $('btn-add-assinatura').disabled = false;
   $('nova-assinatura-nome').value = '';
   $('nova-assinatura-valor').value = '';
+  loadStatus();
+});
+
+$('btn-add-saas-fee')?.addEventListener('click', async () => {
+  const btn = $('btn-add-saas-fee');
+  btn.disabled = true;
+  btn.textContent = 'Adicionando...';
+  
+  await fetch('/api/admin/assinaturas', {
+    method: 'POST', headers: getAuthHeaders(),
+    body: JSON.stringify({ nome: 'Mensalidade do App', valor_centavos: 490 })
+  });
+  
+  btn.disabled = false;
+  btn.textContent = '+ Adicionar Mensalidade do App FAMIl (R$ 4,90)';
   loadStatus();
 });
 
@@ -478,12 +492,15 @@ $('admin-assinaturas-list')?.addEventListener('click', async (e) => {
 $('btn-save-config')?.addEventListener('click', async () => {
   const dia_vencimento = $('config-dia-vencimento').value;
   const modo_pagamento = $('config-modo-pagamento').value;
+  const btn = $('btn-save-config');
+  btn.textContent = 'Salvando...';
   await fetch('/api/admin/config', {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ dia_vencimento, modo_pagamento })
   });
   alert('Configurações salvas!');
+  btn.textContent = 'Salvar';
   loadStatus();
 });
 

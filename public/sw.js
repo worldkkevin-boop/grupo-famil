@@ -1,6 +1,6 @@
 /* ── Service Worker — Grupo FAMIl ─────────────────────────────────────────── */
-const CACHE = 'famil-v6.2';
-const SHELL = ['/app', '/style.css?v=6.2', '/app.js?v=6.2', '/manifest.json', '/icon.svg'];
+const CACHE = 'famil-v6.3';
+const SHELL = ['/app', '/style.css?v=6.3', '/app.js?v=6.3', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
