@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grupo FAMIl — Assinaturas</title>
+  <meta name="description" content="Gerenciador de assinaturas compartilhadas do Grupo FAMIl com rateio automático e pagamento via Pix." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Orbs de fundo -->
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="brand-icon" aria-hidden="true">👨‍👩‍👧‍👦</span>
+        <div>
+          <h1 class="brand-title">Grupo FAMIl</h1>
+          <p class="brand-sub">Assinaturas Compartilhadas</p>
+        </div>
+      </div>
+      <div class="header-info">
+        <div class="stat-pill">
+          <span class="stat-label">Mês</span>
+          <span class="stat-value" id="mes-ref">—</span>
+        </div>
+        <div class="stat-pill total">
+          <span class="stat-label">Total</span>
+          <span class="stat-value" id="total-val">—</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Conteúdo principal -->
+  <main class="main">
+
+    <!-- Progresso geral -->
+    <section class="progress-section" aria-label="Progresso de pagamentos">
+      <div class="progress-header">
+        <span id="progress-text">Carregando...</span>
+        <span class="progress-pct" id="progress-percent">0%</span>
+      </div>
+      <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="subscriptions-list" id="subscriptions-list" aria-label="Assinaturas incluídas"></div>
+    </section>
+
+    <!-- Grid de membros -->
+    <section class="members-section" aria-label="Membros do grupo">
+      <h2 class="section-title">Membros</h2>
+      <div class="members-grid" id="members-grid">
+        <!-- Gerado por app.js -->
+        <div class="card-skeleton"></div>
+        <div class="card-skeleton"></div>
+        <div class="card-skeleton"></div>
+        <div class="card-skeleton"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal Pix -->
+  <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-member-name">
+    <div class="modal">
+      <button class="modal-close" id="modal-close" aria-label="Fechar modal">✕</button>
+
+      <div class="modal-header">
+        <span class="modal-icon" aria-hidden="true">⚡</span>
+        <div>
+          <h2 class="modal-title" id="modal-member-name">—</h2>
+          <p class="modal-amount" id="modal-amount">R$ 0,00</p>
+        </div>
+      </div>
+
+      <div class="modal-qr" id="modal-qr">
+        <div class="qr-loading" id="qr-loading">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Gerando QR Code...</p>
+        </div>
+        <img id="qr-img" class="qr-image hidden" alt="QR Code Pix para pagamento" />
+      </div>
+
+      <div class="modal-copy">
+        <input
+          type="text"
+          id="pix-code"
+          class="pix-input"
+          readonly
+          placeholder="Aguardando código..."
+          aria-label="Código Pix copia e cola"
+        />
+        <button class="btn-copy" id="btn-copy">Copiar</button>
+      </div>
+
+      <button class="btn-mark-paid" id="btn-mark-paid">
+        <span aria-hidden="true">✅</span> Marcar como Pago
+      </button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
