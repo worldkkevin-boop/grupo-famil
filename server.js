@@ -6,6 +6,7 @@ const { DatabaseSync } = require('node:sqlite');
 const crypto   = require('node:crypto');
 const path     = require('path');
 const QRCode   = require('qrcode');
+const webpush  = require('web-push');
 
 const app      = express();
 const PORT            = process.env.PORT             || 4001;
@@ -75,20 +76,34 @@ if (cntAssinaturas === 0) {
 // Seed inicial: config
 const { cntConfig } = db.prepare('SELECT COUNT(*) as cnt FROM config').get();
 if (cntConfig === 0) {
-  const vapidKeys = webpush.generateVAPIDKeys();
   const ins = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?)');
   ins.run('dia_vencimento', '10');
   ins.run('modo_pagamento', 'rateio'); // 'rateio' ou ID do membro (ex: '3')
-  ins.run('vapid_public', vapidKeys.publicKey);
-  ins.run('vapid_private', vapidKeys.privateKey);
-  console.log('✅  Configurações iniciais e VAPID Keys inseridas.');
+  console.log('✅  Configurações iniciais inseridas.');
 }
 
 // Configurar Web Push
+function getConfig(chave, padrao) {
+  const row = db.prepare('SELECT valor FROM config WHERE chave=?').get(chave);
+  return row ? row.valor : padrao;
+}
+
+let vapidPublic = getConfig('vapid_public', null);
+let vapidPrivate = getConfig('vapid_private', null);
+if (!vapidPublic || !vapidPrivate) {
+  const vapidKeys = webpush.generateVAPIDKeys();
+  const ins = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?)');
+  ins.run('vapid_public', vapidKeys.publicKey);
+  ins.run('vapid_private', vapidKeys.privateKey);
+  vapidPublic = vapidKeys.publicKey;
+  vapidPrivate = vapidKeys.privateKey;
+  console.log('✅  VAPID Keys geradas e inseridas.');
+}
+
 webpush.setVapidDetails(
   `mailto:${ADMIN_EMAIL || 'admin@localhost'}`,
-  getConfig('vapid_public', ''),
-  getConfig('vapid_private', '')
+  vapidPublic,
+  vapidPrivate
 );
 
 // ── Estado Compartilhado ──────────────────────────────────────────────────────
@@ -97,10 +112,6 @@ function getAssinaturas() {
 }
 function getTotalCentavos() {
   return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1').get().total || 0;
-}
-function getConfig(chave, padrao) {
-  const row = db.prepare('SELECT valor FROM config WHERE chave=?').get(chave);
-  return row ? row.valor : padrao;
 }
 
 // ── Pix EMV ───────────────────────────────────────────────────────────────────
