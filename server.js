@@ -21,28 +21,45 @@ const PIX_CITY = process.env.PIX_CITY || 'LARANJAL DO JARI';
 const db = new DatabaseSync(path.join(__dirname, 'grupo-famil.db'));
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS grupos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome           TEXT NOT NULL,
+    dono_email     TEXT NOT NULL,
+    pix_key        TEXT,
+    pix_name       TEXT,
+    pix_city       TEXT,
+    ativo          INTEGER DEFAULT 1,
+    data_criacao   TEXT
+  );
   CREATE TABLE IF NOT EXISTS membros (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome  TEXT    NOT NULL,
-    ativo INTEGER DEFAULT 1
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    grupo_id  INTEGER NOT NULL DEFAULT 1,
+    nome      TEXT    NOT NULL,
+    ativo     INTEGER DEFAULT 1,
+    FOREIGN KEY(grupo_id) REFERENCES grupos(id)
   );
   CREATE TABLE IF NOT EXISTS pagamentos (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    grupo_id       INTEGER NOT NULL DEFAULT 1,
     membro_id      INTEGER NOT NULL,
     mes_referencia TEXT    NOT NULL,
     pago           INTEGER DEFAULT 0,
     data_pagamento TEXT,
+    FOREIGN KEY(grupo_id) REFERENCES grupos(id),
     FOREIGN KEY(membro_id) REFERENCES membros(id)
   );
   CREATE TABLE IF NOT EXISTS assinaturas (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    grupo_id       INTEGER NOT NULL DEFAULT 1,
     nome           TEXT NOT NULL,
     valor_centavos INTEGER NOT NULL,
-    ativo          INTEGER DEFAULT 1
+    ativo          INTEGER DEFAULT 1,
+    FOREIGN KEY(grupo_id) REFERENCES grupos(id)
   );
   CREATE TABLE IF NOT EXISTS config (
     chave          TEXT PRIMARY KEY,
-    valor          TEXT NOT NULL
+    valor          TEXT NOT NULL,
+    grupo_id       INTEGER DEFAULT 1
   );
 `);
 
@@ -53,7 +70,19 @@ for (const col of [
   'ALTER TABLE membros ADD COLUMN convite_usado INTEGER DEFAULT 0',
   'ALTER TABLE membros ADD COLUMN foto_url TEXT',
   'ALTER TABLE membros ADD COLUMN google_sub TEXT',
+  'ALTER TABLE membros ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE pagamentos ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE assinaturas ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE config ADD COLUMN grupo_id INTEGER DEFAULT 1',
 ]) { try { db.exec(col); } catch {} }
+
+// Seed inicial: Grupo 1 (O grupo legadado do Admin principal)
+const { cntGrupos } = db.prepare('SELECT COUNT(*) as cnt FROM grupos').get();
+if (cntGrupos === 0) {
+  const ins = db.prepare('INSERT INTO grupos (id, nome, dono_email, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  ins.run(1, 'Grupo FAMIl Principal', ADMIN_EMAIL, PIX_KEY, PIX_NAME, PIX_CITY, new Date().toISOString());
+  console.log('✅  Grupo inicial (SaaS) criado para o dono:', ADMIN_EMAIL);
+}
 
 // Seed inicial: membros
 const { cntMembros } = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
@@ -83,8 +112,8 @@ if (cntConfig === 0) {
 }
 
 // Configurar Web Push
-function getConfig(chave, padrao) {
-  const row = db.prepare('SELECT valor FROM config WHERE chave=?').get(chave);
+function getConfig(chave, padrao, grupo_id = 1) {
+  const row = db.prepare('SELECT valor FROM config WHERE chave=? AND grupo_id=?').get(chave, grupo_id);
   return row ? row.valor : padrao;
 }
 
@@ -107,11 +136,11 @@ webpush.setVapidDetails(
 );
 
 // ── Estado Compartilhado ──────────────────────────────────────────────────────
-function getAssinaturas() {
-  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas WHERE ativo=1 ORDER BY id').all();
+function getAssinaturas(grupo_id) {
+  return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas WHERE ativo=1 AND grupo_id=? ORDER BY id').all(grupo_id);
 }
-function getTotalCentavos() {
-  return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1').get().total || 0;
+function getTotalCentavos(grupo_id) {
+  return db.prepare('SELECT SUM(valor_centavos) as total FROM assinaturas WHERE ativo=1 AND grupo_id=?').get(grupo_id).total || 0;
 }
 
 // ── Pix EMV ───────────────────────────────────────────────────────────────────
@@ -128,20 +157,20 @@ function crc16(str) {
 }
 function tlv(id, v) { return `${id}${String(v.length).padStart(2,'0')}${v}`; }
 function semAcentos(s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase(); }
-function gerarPix(centavos) {
+function gerarPix(centavos, grupo) {
   const v = (centavos/100).toFixed(2);
-  const n = semAcentos(PIX_NAME).substring(0,25);
-  const c = semAcentos(PIX_CITY).substring(0,15);
-  const info = tlv('00','br.gov.bcb.pix')+tlv('01',PIX_KEY)+tlv('02','Assinaturas FAMIl');
+  const n = semAcentos(grupo.pix_name || '').substring(0,25);
+  const c = semAcentos(grupo.pix_city || '').substring(0,15);
+  const info = tlv('00','br.gov.bcb.pix')+tlv('01',grupo.pix_key || '')+tlv('02','Assinaturas FAMIl');
   const body = tlv('00','01')+tlv('26',info)+tlv('52','0000')+tlv('53','986')+tlv('54',v)+tlv('58','BR')+tlv('59',n)+tlv('60',c)+tlv('62',tlv('05','***'));
   return body + tlv('63', crc16(body+'6304'));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function mesAtual() { return new Date().toISOString().slice(0, 7); }
-function calcularCotas(membros) {
-  const total = getTotalCentavos();
-  const modo = getConfig('modo_pagamento', 'rateio');
+function calcularCotas(membros, grupo_id) {
+  const total = getTotalCentavos(grupo_id);
+  const modo = getConfig('modo_pagamento', 'rateio', grupo_id);
 
   if (modo !== 'rateio') {
     // Modo "Mês Cheio" - Alguém paga tudo sozinho
@@ -184,7 +213,7 @@ function getSession(req) {
 
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 app.get('/convite/:token', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'convite.html'))
 );
@@ -200,11 +229,12 @@ app.get('/api/status', (req, res) => {
   if (!session) return res.status(401).json({ erro: 'Não autorizado' });
 
   const isAdmin = session.role === 'admin';
+  const grupo_id = session.grupo_id;
   const mes = mesAtual();
-  const membros = db.prepare('SELECT id, nome, email, foto_url, ativo FROM membros').all();
-  const comCotas = calcularCotas(membros);
+  const membros = db.prepare('SELECT id, nome, email, foto_url, ativo FROM membros WHERE grupo_id=?').all(grupo_id);
+  const comCotas = calcularCotas(membros, grupo_id);
 
-  const pagamentos = db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all(mes);
+  const pagamentos = db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1 AND grupo_id=?').all(mes, grupo_id);
   const pagos = new Set(pagamentos.map(p => p.membro_id));
 
   comCotas.forEach(m => {
@@ -213,10 +243,10 @@ app.get('/api/status', (req, res) => {
     m.pago = isPaid;
   });
 
-  const total = getTotalCentavos();
-  const assinaturas = getAssinaturas();
-  const diaVencimento = getConfig('dia_vencimento', '10');
-  const modoPagamento = getConfig('modo_pagamento', 'rateio');
+  const total = getTotalCentavos(grupo_id);
+  const assinaturas = getAssinaturas(grupo_id);
+  const diaVencimento = getConfig('dia_vencimento', '10', grupo_id);
+  const modoPagamento = getConfig('modo_pagamento', 'rateio', grupo_id);
 
   res.json({
     mes,
@@ -224,7 +254,7 @@ app.get('/api/status', (req, res) => {
     assinaturas,
     dia_vencimento: diaVencimento,
     modo_pagamento: modoPagamento,
-    vapid_public: getConfig('vapid_public', ''),
+    vapid_public: getConfig('vapid_public', '', 1), // Vapid é global (grupo 1)
     membros: comCotas,
     isAdmin
   });
@@ -232,10 +262,15 @@ app.get('/api/status', (req, res) => {
 
 // ── API: Pix ──────────────────────────────────────────────────────────────────
 app.post('/api/pix', async (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ erro: 'Não autorizado' });
+
   const { valor_centavos } = req.body;
   if (!Number.isInteger(valor_centavos) || valor_centavos <= 0)
     return res.status(400).json({ erro: 'valor_centavos inválido' });
-  const payload = gerarPix(valor_centavos);
+
+  const grupo = db.prepare('SELECT pix_key, pix_name, pix_city FROM grupos WHERE id=?').get(session.grupo_id);
+  const payload = gerarPix(valor_centavos, grupo || {});
   try {
     const qr_base64 = await QRCode.toDataURL(payload, { width:280, margin:2, color:{dark:'#12122a',light:'#ffffff'} });
     res.json({ payload, qr_base64 });
@@ -249,11 +284,12 @@ app.post('/api/pagar', (req, res) => {
 
   const { membro_id } = req.body;
   const mes = mesAtual();
-  const row = db.prepare('SELECT id FROM pagamentos WHERE membro_id=? AND mes_referencia=?').get(membro_id, mes);
+  const grupo_id = session.grupo_id;
+  const row = db.prepare('SELECT id FROM pagamentos WHERE membro_id=? AND mes_referencia=? AND grupo_id=?').get(membro_id, mes, grupo_id);
   if (row) {
     db.prepare('UPDATE pagamentos SET pago=1, data_pagamento=? WHERE id=?').run(new Date().toISOString(), row.id);
   } else {
-    db.prepare('INSERT INTO pagamentos (membro_id,mes_referencia,pago,data_pagamento) VALUES(?,?,1,?)').run(membro_id, mes, new Date().toISOString());
+    db.prepare('INSERT INTO pagamentos (membro_id,mes_referencia,pago,data_pagamento,grupo_id) VALUES(?,?,1,?,?)').run(membro_id, mes, new Date().toISOString(), grupo_id);
   }
   res.json({ ok: true });
 });
@@ -264,7 +300,8 @@ app.post('/api/despagar', (req, res) => {
 
   const { membro_id } = req.body;
   const mes = mesAtual();
-  db.prepare('UPDATE pagamentos SET pago=0, data_pagamento=NULL WHERE membro_id=? AND mes_referencia=?').run(membro_id, mes);
+  const grupo_id = session.grupo_id;
+  db.prepare('UPDATE pagamentos SET pago=0, data_pagamento=NULL WHERE membro_id=? AND mes_referencia=? AND grupo_id=?').run(membro_id, mes, grupo_id);
   res.json({ ok: true });
 });
 
@@ -280,11 +317,11 @@ app.post('/api/admin/push/disparar', async (req, res) => {
   const session = getSession(req);
   if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
-  const membros = db.prepare('SELECT id, nome, push_sub FROM membros WHERE ativo=1').all();
+  const membros = db.prepare('SELECT id, nome, push_sub FROM membros WHERE ativo=1 AND grupo_id=?').all(session.grupo_id);
   // Pega quem não pagou ainda (ou todos, se precisarmos recalcular)
   const mes = mesAtual();
   const pagamentos = new Set(
-    db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1').all(mes).map(p => p.membro_id)
+    db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1 AND grupo_id=?').all(mes, session.grupo_id).map(p => p.membro_id)
   );
 
   let enviados = 0;
@@ -346,11 +383,14 @@ setInterval(async () => {
 
 // ── API: Convites ─────────────────────────────────────────────────────────────
 app.post('/api/convite/gerar', (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
   const { membro_id } = req.body;
-  const membro = db.prepare('SELECT * FROM membros WHERE id=?').get(membro_id);
+  const membro = db.prepare('SELECT * FROM membros WHERE id=? AND grupo_id=?').get(membro_id, session.grupo_id);
   if (!membro || membro.ativo) return res.status(400).json({ erro: 'Slot inválido ou já ocupado' });
   const token = crypto.randomBytes(16).toString('hex');
-  db.prepare('UPDATE membros SET convite_token=?, convite_usado=0 WHERE id=?').run(token, membro_id);
+  db.prepare('UPDATE membros SET convite_token=?, convite_usado=0 WHERE id=? AND grupo_id=?').run(token, membro_id, session.grupo_id);
   res.json({ link: `${BASE_URL}/convite/${token}` });
 });
 
@@ -402,23 +442,31 @@ app.post('/api/login', async (req, res) => {
     const info = await verificarTokenGoogle(req.body.google_id_token);
     let role = null;
     let membroId = null;
+    let grupoId = null;
 
-    if (info.email === ADMIN_EMAIL) {
+    // Tenta achar se é dono de algum grupo
+    const donoGrupo = db.prepare('SELECT id FROM grupos WHERE dono_email=? AND ativo=1').get(info.email);
+    if (donoGrupo) {
       role = 'admin';
+      grupoId = donoGrupo.id;
     }
 
-    const membro = db.prepare('SELECT id FROM membros WHERE email=? AND ativo=1').get(info.email);
-    if (membro) {
-      membroId = membro.id;
-      if (!role) role = 'member';
+    // Se não for dono (ou mesmo se for, se ele estiver logando como membro convidado, ele é membro do grupo que o convidou. Mas por enquanto, se ele é dono, loga como admin).
+    if (!role) {
+      const membro = db.prepare('SELECT id, grupo_id FROM membros WHERE email=? AND ativo=1').get(info.email);
+      if (membro) {
+        role = 'member';
+        membroId = membro.id;
+        grupoId = membro.grupo_id;
+      }
     }
 
     if (!role) {
-      return res.status(403).json({ erro: 'Acesso negado. Você não possui convite para este grupo.' });
+      return res.status(403).json({ erro: 'Acesso negado. Você não possui grupo cadastrado ou convite.' });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    sessionTokens.set(token, { role, membro_id: membroId, nome: info.name });
+    sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome: info.name });
     
     res.json({ token, role, nome: info.name });
   } catch (e) {
@@ -431,8 +479,8 @@ app.post('/api/admin/remover', (req, res) => {
   if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { membro_id } = req.body;
-  db.prepare("UPDATE membros SET ativo=0, nome='Membro ' || id, email=NULL, foto_url=NULL, google_sub=NULL, convite_usado=0 WHERE id=?")
-    .run(membro_id);
+  db.prepare("UPDATE membros SET ativo=0, nome='Membro ' || id, email=NULL, foto_url=NULL, google_sub=NULL, convite_usado=0 WHERE id=? AND grupo_id=?")
+    .run(membro_id, session.grupo_id);
   res.json({ ok: true });
 });
 
@@ -444,9 +492,9 @@ app.post('/api/admin/assinaturas', (req, res) => {
   if (!nome || !valor_centavos) return res.status(400).json({ erro: 'Dados inválidos' });
 
   if (id) {
-    db.prepare('UPDATE assinaturas SET nome=?, valor_centavos=? WHERE id=?').run(nome, valor_centavos, id);
+    db.prepare('UPDATE assinaturas SET nome=?, valor_centavos=? WHERE id=? AND grupo_id=?').run(nome, valor_centavos, id, session.grupo_id);
   } else {
-    db.prepare('INSERT INTO assinaturas (nome, valor_centavos, ativo) VALUES (?, ?, 1)').run(nome, valor_centavos);
+    db.prepare('INSERT INTO assinaturas (nome, valor_centavos, ativo, grupo_id) VALUES (?, ?, 1, ?)').run(nome, valor_centavos, session.grupo_id);
   }
   res.json({ ok: true });
 });
@@ -455,7 +503,7 @@ app.delete('/api/admin/assinaturas/:id', (req, res) => {
   const session = getSession(req);
   if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
-  db.prepare('UPDATE assinaturas SET ativo=0 WHERE id=?').run(req.params.id);
+  db.prepare('UPDATE assinaturas SET ativo=0 WHERE id=? AND grupo_id=?').run(req.params.id, session.grupo_id);
   res.json({ ok: true });
 });
 
@@ -464,15 +512,54 @@ app.post('/api/admin/config', (req, res) => {
   if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   const { dia_vencimento, modo_pagamento } = req.body;
-  const upd = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor');
   
-  if (dia_vencimento !== undefined) upd.run('dia_vencimento', dia_vencimento);
-  if (modo_pagamento !== undefined) upd.run('modo_pagamento', modo_pagamento);
+  // Como config tinha PRIMARY KEY na chave, precisamos usar delete + insert para lidar com grupo_id
+  const upsert = (k, v) => {
+    db.prepare('DELETE FROM config WHERE chave=? AND grupo_id=?').run(k, session.grupo_id);
+    db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run(k, v, session.grupo_id);
+  };
+  
+  if (dia_vencimento !== undefined) upsert('dia_vencimento', dia_vencimento);
+  if (modo_pagamento !== undefined) upsert('modo_pagamento', modo_pagamento);
 
   res.json({ ok: true });
 });
 
-// ── Fallback ─────────────────────────────────────────────────────────────────────
+// ── API: SaaS Onboarding (Simulação de Checkout) ──────────────────────────────
+app.post('/api/checkout', (req, res) => {
+  // Em produção, isso seria um Webhook do Stripe/MercadoPago após o pagamento.
+  // Aqui estamos simulando que o usuário pagou e está criando o grupo.
+  const { nome_grupo, dono_email, pix_key, pix_name, pix_city } = req.body;
+  
+  if (!nome_grupo || !dono_email || !pix_key || !pix_name || !pix_city) {
+    return res.status(400).json({ erro: 'Preencha todos os campos do seu grupo e dados Pix' });
+  }
+
+  // Verifica se o e-mail já é dono de algum grupo
+  const existe = db.prepare('SELECT id FROM grupos WHERE dono_email=?').get(dono_email);
+  if (existe) return res.status(400).json({ erro: 'Este e-mail já possui um grupo' });
+
+  // Cria o grupo
+  const ins = db.prepare('INSERT INTO grupos (nome, dono_email, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?)');
+  const info = ins.run(nome_grupo, dono_email, pix_key, pix_name, pix_city, new Date().toISOString());
+  const grupoId = info.lastInsertRowid;
+
+  // Insere configurações padrão
+  db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run('dia_vencimento', '10', grupoId);
+  db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run('modo_pagamento', 'rateio', grupoId);
+
+  // Insere alguns slots vazios de membros para o grupo
+  const insMembro = db.prepare('INSERT INTO membros (nome, ativo, grupo_id) VALUES (?, 0, ?)');
+  ['Membro 1', 'Membro 2', 'Membro 3', 'Membro 4', 'Membro 5'].forEach(n => insMembro.run(n, grupoId));
+
+  res.json({ ok: true, grupo_id: grupoId });
+});
+
+// ── Rotas do Front-End ────────────────────────────────────────────────────────
+app.get('/app', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'app.html')));
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
+
+// ── Fallback ──────────────────────────────────────────────────────────────────
 app.listen(PORT, () =>
   console.log(`✅  Grupo-FAMIl → ${BASE_URL}  |  mês: ${mesAtual()}`)
 );

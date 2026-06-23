@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Gerenciador FAMIl - SaaS</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=5" />
+  
+  <style>
+    body {
+      background: var(--bg-dark);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+    }
+    header {
+      width: 100%;
+      padding: 24px;
+      text-align: center;
+      background: rgba(18, 18, 42, 0.8);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .hero {
+      max-width: 600px;
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .hero h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 16px; background: linear-gradient(135deg, var(--primary), var(--primary-hover)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 32px; line-height: 1.6; }
+    .features {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .feature-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      text-align: left;
+    }
+    .feature-card h3 { color: var(--primary); margin-bottom: 8px; }
+    
+    /* Modal de Onboarding */
+    #onboarding-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    #onboarding-modal.active { display: flex; }
+    .onboarding-content {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .input-group { margin-bottom: 16px; }
+    .input-group label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+    .input-group input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-dark); color: #fff; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="/icon.svg" alt="Logo" style="width:48px; height:48px;">
+    <h2>Grupo FAMIl</h2>
+  </header>
+
+  <main class="hero">
+    <h1>Crie seu próprio Gerenciador de Assinaturas</h1>
+    <p>Organize o rateio do Spotify, Netflix, YouTube Premium e muito mais com seus amigos e familiares. Nunca mais fique cobrando as pessoas manualmente!</p>
+    
+    <div class="features">
+      <div class="feature-card">
+        <h3>🔗 Convites Mágicos</h3>
+        <p>Envie links únicos para convidar sua família. Eles entram com um clique pelo Google.</p>
+      </div>
+      <div class="feature-card">
+        <h3>💸 Pagamentos Pix</h3>
+        <p>Geração de Pix automático com o valor exato rateado para cada membro do grupo.</p>
+      </div>
+      <div class="feature-card">
+        <h3>🔔 Notificações Push</h3>
+        <p>Avisos no celular de todos automaticamente quando a fatura do mês fechar.</p>
+      </div>
+    </div>
+
+    <button onclick="document.getElementById('onboarding-modal').classList.add('active')" class="btn-main" style="font-size: 1.1rem; padding: 16px 32px; border-radius: 32px; font-weight: 700; width: 100%;">
+      Criar Meu Grupo (Teste Grátis)
+    </button>
+    <br><br>
+    <a href="/app" style="color:var(--text-muted); font-size:0.9rem; text-decoration:none;">Já tem um grupo? Fazer Login</a>
+  </main>
+
+  <div id="onboarding-modal">
+    <div class="onboarding-content">
+      <h2 style="margin-bottom: 24px; text-align:center;">Configurar seu Grupo</h2>
+      
+      <div class="input-group">
+        <label>Seu E-mail Google (Será o Administrador)</label>
+        <input type="email" id="onb-email" placeholder="seuemail@gmail.com">
+      </div>
+      <div class="input-group">
+        <label>Nome do Grupo</label>
+        <input type="text" id="onb-grupo" placeholder="Ex: Galera da Faculdade">
+      </div>
+      
+      <div style="margin-top:24px; margin-bottom:16px; border-top:1px solid var(--border); padding-top:16px;">
+        <h4 style="color:var(--primary); margin-bottom:16px;">Dados para Receber o Pix</h4>
+        <div class="input-group">
+          <label>Chave Pix</label>
+          <input type="text" id="onb-pixkey" placeholder="CPF, Celular, E-mail ou Aleatória">
+        </div>
+        <div class="input-group">
+          <label>Nome do Titular do Pix</label>
+          <input type="text" id="onb-pixname" placeholder="Ex: Joao Silva">
+        </div>
+        <div class="input-group">
+          <label>Cidade da Conta</label>
+          <input type="text" id="onb-pixcity" placeholder="Ex: Sao Paulo">
+        </div>
+      </div>
+
+      <button id="btn-finalizar" onclick="criarGrupo()" class="btn-main" style="width:100%; padding:14px; border-radius:12px; margin-top:8px;">
+        Finalizar e Criar
+      </button>
+      <button onclick="document.getElementById('onboarding-modal').classList.remove('active')" style="width:100%; padding:14px; background:transparent; border:none; color:var(--text-muted); margin-top:8px; cursor:pointer;">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  <script>
+    async function criarGrupo() {
+      const payload = {
+        dono_email: document.getElementById('onb-email').value.trim().toLowerCase(),
+        nome_grupo: document.getElementById('onb-grupo').value.trim(),
+        pix_key: document.getElementById('onb-pixkey').value.trim(),
+        pix_name: document.getElementById('onb-pixname').value.trim(),
+        pix_city: document.getElementById('onb-pixcity').value.trim()
+      };
+
+      if (!payload.dono_email || !payload.nome_grupo || !payload.pix_key || !payload.pix_name || !payload.pix_city) {
+        return alert("Por favor, preencha todos os campos.");
+      }
+
+      const btn = document.getElementById('btn-finalizar');
+      btn.disabled = true;
+      btn.textContent = "Criando...";
+
+      try {
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.erro || 'Erro ao criar grupo');
+        }
+
+        alert("Grupo criado com sucesso! Você será redirecionado para o aplicativo. Faça login com o seu Google (" + payload.dono_email + ").");
+        window.location.href = '/app';
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.textContent = "Finalizar e Criar";
+      }
+    }
+  </script>
+</body>
+</html>
