@@ -386,10 +386,11 @@ $('btn-copy').addEventListener('click', () => copyText('pix-code', 'btn-copy'));
 $('btn-copy-invite').addEventListener('click', () => copyText('invite-link-input', 'btn-copy-invite'));
 
 // ── Marcar pago ───────────────────────────────────────────────────────────────
-async function setPago(id) {
+async function markPaid() {
+  if (!state.selectedMembro) return;
   await fetch('/api/pagar', {
     method: 'POST', headers: getAuthHeaders(),
-    body: JSON.stringify({ membro_id: id })
+    body: JSON.stringify({ membro_id: state.selectedMembro.id })
   });
   closeModal('modal-overlay');
   await loadStatus();
