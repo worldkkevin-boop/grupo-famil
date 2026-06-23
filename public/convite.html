@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Convite — Grupo FAMIl</title>
+  <meta name="description" content="Você foi convidado para o Grupo FAMIl!" />
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FAMIl" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary:  #7c3aed;
+      --primary-light: #a78bfa;
+      --success:  #10b981;
+      --danger:   #f87171;
+      --bg:       #06060f;
+      --surface:  rgba(255,255,255,0.05);
+      --border:   rgba(255,255,255,0.1);
+      --text:     #e2e8f0;
+      --text-soft:#94a3b8;
+      --text-muted:#475569;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px env(safe-area-inset-bottom, 24px);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Orbs */
+    .bg-orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .orb { position: absolute; border-radius: 50%; filter: blur(100px); }
+    .orb-1 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(124,58,237,0.55), transparent); top: -150px; left: -150px; }
+    .orb-2 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(6,182,212,0.35), transparent); bottom: -100px; right: -100px; }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 36px 28px;
+      width: 100%;
+      max-width: 420px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(124,58,237,0.15);
+      text-align: center;
+    }
+
+    /* App brand */
+    .app-brand { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 28px; }
+    .brand-logo {
+      width: 72px; height: 72px;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem;
+      box-shadow: 0 8px 32px rgba(124,58,237,0.5);
+    }
+    .brand-name { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(135deg, #a78bfa, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .brand-tagline { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* States */
+    .state { display: none; flex-direction: column; align-items: center; gap: 16px; }
+    .state.active { display: flex; }
+
+    .state-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; }
+    .state-sub { font-size: 0.9rem; color: var(--text-soft); line-height: 1.5; }
+
+    /* Form */
+    .form { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 4px; }
+    .input-group { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+    .input-label { font-size: 0.78rem; font-weight: 600; color: var(--text-soft); letter-spacing: 0.02em; }
+    .input {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 13px 16px;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .input:focus { border-color: rgba(124,58,237,0.6); box-shadow: 0 0 0 3px rgba(124,58,237,0.15); }
+    .input::placeholder { color: var(--text-muted); }
+    .input.error { border-color: var(--danger); }
+
+    .btn-main {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--primary), #4f46e5);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s, box-shadow 0.2s;
+      margin-top: 4px;
+      letter-spacing: 0.01em;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-main:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,58,237,0.45); }
+    .btn-main:active:not(:disabled) { transform: translateY(0); }
+    .btn-main:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error-msg { font-size: 0.8rem; color: var(--danger); }
+
+    /* Spinner */
+    .spinner { width: 40px; height: 40px; border: 3px solid rgba(124,58,237,0.2); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Install screen */
+    .install-box {
+      width: 100%;
+      background: rgba(124,58,237,0.1);
+      border: 1px solid rgba(124,58,237,0.25);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: left;
+    }
+    .install-box-title { font-size: 1rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .install-steps { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .install-steps li { font-size: 0.85rem; color: var(--text-soft); display: flex; align-items: flex-start; gap: 10px; line-height: 1.4; }
+    .step-num { width: 22px; height: 22px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .share-icon { display: inline-block; width: 16px; height: 16px; vertical-align: middle; }
+
+    .btn-install-android {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--primary), #4f46e5);
+      color: #fff;
+      border: none; border-radius: 12px;
+      font-family: inherit; font-size: 0.95rem; font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all 0.15s;
+    }
+    .btn-install-android:hover { opacity: 0.9; }
+
+    .btn-dashboard {
+      width: 100%;
+      padding: 13px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text-soft);
+      border-radius: 12px;
+      font-family: inherit; font-size: 0.9rem; font-weight: 500;
+      text-decoration: none;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .btn-dashboard:hover { border-color: rgba(255,255,255,0.3); color: var(--text); }
+
+    /* Success icon */
+    .success-icon { font-size: 3.5rem; line-height: 1; }
+    .success-name { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.04em; background: linear-gradient(135deg, #a78bfa, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .divider { width: 100%; height: 1px; background: var(--border); margin: 4px 0; }
+
+    /* Error */
+    .error-icon { font-size: 3rem; }
+    .error-title { font-size: 1.3rem; font-weight: 700; color: var(--danger); }
+    .error-sub { font-size: 0.88rem; color: var(--text-soft); }
+  </style>
+</head>
+<body>
+
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
+  <div class="card">
+
+    <!-- Marca do app (sempre visível) -->
+    <div class="app-brand">
+      <div class="brand-logo">F</div>
+      <div>
+        <div class="brand-name">Grupo FAMIl</div>
+        <div class="brand-tagline">Assinaturas Compartilhadas</div>
+      </div>
+    </div>
+
+    <!-- Estado: carregando -->
+    <div class="state active" id="state-loading">
+      <div class="spinner"></div>
+      <p style="color:var(--text-muted);font-size:.85rem">Validando convite...</p>
+    </div>
+
+    <!-- Estado: formulário -->
+    <div class="state" id="state-form">
+      <div class="state-title">👋 Você foi convidado!</div>
+      <p class="state-sub">Preencha seus dados para entrar no grupo de assinaturas compartilhadas.</p>
+      <form class="form" id="convite-form" novalidate>
+        <div class="input-group">
+          <label class="input-label" for="input-nome">Seu nome</label>
+          <input class="input" type="text" id="input-nome" name="nome" placeholder="Como você se chama?" autocomplete="given-name" required />
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="input-email">Seu e-mail</label>
+          <input class="input" type="email" id="input-email" name="email" placeholder="seu@email.com" autocomplete="email" required />
+        </div>
+        <p class="error-msg hidden" id="form-error"></p>
+        <button class="btn-main" type="submit" id="btn-submit">
+          Entrar no grupo →
+        </button>
+      </form>
+    </div>
+
+    <!-- Estado: sucesso + install -->
+    <div class="state" id="state-success">
+      <div class="success-icon">🎉</div>
+      <div class="success-name" id="success-name">Bem-vindo(a)!</div>
+      <p class="state-sub">Você já faz parte do <strong>Grupo FAMIl</strong>. Agora instale o app para acessar sempre rápido.</p>
+      <div class="divider"></div>
+
+      <!-- Android: botão nativo -->
+      <div id="install-android" class="hidden" style="width:100%;display:flex;flex-direction:column;gap:10px">
+        <button class="btn-install-android" id="btn-install-pwa">
+          <span>📲</span> Instalar app no celular
+        </button>
+      </div>
+
+      <!-- iOS: instrução manual -->
+      <div id="install-ios" class="hidden" style="width:100%">
+        <div class="install-box">
+          <div class="install-box-title">
+            <span>📲</span> Adicionar à Tela de Início
+          </div>
+          <ul class="install-steps">
+            <li>
+              <span class="step-num">1</span>
+              <span>Toque no botão de compartilhar
+                <svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+                na barra inferior do Safari
+              </span>
+            </li>
+            <li>
+              <span class="step-num">2</span>
+              <span>Role para baixo e toque em <strong>"Adicionar à Tela de Início"</strong></span>
+            </li>
+            <li>
+              <span class="step-num">3</span>
+              <span>Toque em <strong>"Adicionar"</strong> e pronto! 🎉</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Desktop ou já instalado -->
+      <div id="install-done" class="hidden" style="width:100%">
+        <p style="font-size:.85rem;color:var(--text-muted);text-align:center">✅ Você já pode acessar pelo link salvo.</p>
+      </div>
+
+      <a class="btn-dashboard" href="/" id="btn-go-dashboard">Abrir dashboard →</a>
+    </div>
+
+    <!-- Estado: convite inválido -->
+    <div class="state" id="state-invalid">
+      <div class="error-icon">❌</div>
+      <div class="error-title">Convite inválido</div>
+      <p class="error-sub" id="error-detail">Este link é inválido, expirou ou já foi usado. Peça um novo convite ao administrador.</p>
+    </div>
+
+  </div>
+
+  <script src="/convite.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "Grupo FAMIl — Assinaturas",
+  "short_name": "FAMIl",
+  "description": "Gerencie as assinaturas compartilhadas do Grupo FAMIl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#06060f",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

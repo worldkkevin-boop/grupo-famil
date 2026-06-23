@@ -2,9 +2,19 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Grupo FAMIl — Assinaturas</title>
   <meta name="description" content="Gerenciador de assinaturas compartilhadas do Grupo FAMIl com rateio automático e pagamento via Pix." />
+
+  <!-- PWA -->
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FAMIl" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -54,14 +64,13 @@
       <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
         <div class="progress-fill" id="progress-fill"></div>
       </div>
-      <div class="subscriptions-list" id="subscriptions-list" aria-label="Assinaturas incluídas"></div>
+      <div class="subscriptions-list" id="subscriptions-list"></div>
     </section>
 
     <!-- Grid de membros -->
     <section class="members-section" aria-label="Membros do grupo">
       <h2 class="section-title">Membros</h2>
       <div class="members-grid" id="members-grid">
-        <!-- Gerado por app.js -->
         <div class="card-skeleton"></div>
         <div class="card-skeleton"></div>
         <div class="card-skeleton"></div>
@@ -75,7 +84,6 @@
   <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-member-name">
     <div class="modal">
       <button class="modal-close" id="modal-close" aria-label="Fechar modal">✕</button>
-
       <div class="modal-header">
         <span class="modal-icon" aria-hidden="true">⚡</span>
         <div>
@@ -83,7 +91,6 @@
           <p class="modal-amount" id="modal-amount">R$ 0,00</p>
         </div>
       </div>
-
       <div class="modal-qr" id="modal-qr">
         <div class="qr-loading" id="qr-loading">
           <div class="spinner" aria-hidden="true"></div>
@@ -91,23 +98,48 @@
         </div>
         <img id="qr-img" class="qr-image hidden" alt="QR Code Pix para pagamento" />
       </div>
-
       <div class="modal-copy">
-        <input
-          type="text"
-          id="pix-code"
-          class="pix-input"
-          readonly
-          placeholder="Aguardando código..."
-          aria-label="Código Pix copia e cola"
-        />
+        <input type="text" id="pix-code" class="pix-input" readonly placeholder="Aguardando código..." aria-label="Código Pix copia e cola" />
         <button class="btn-copy" id="btn-copy">Copiar</button>
       </div>
-
       <button class="btn-mark-paid" id="btn-mark-paid">
         <span aria-hidden="true">✅</span> Marcar como Pago
       </button>
     </div>
+  </div>
+
+  <!-- Modal Convite -->
+  <div class="modal-overlay" id="invite-overlay" role="dialog" aria-modal="true" aria-label="Link de convite">
+    <div class="modal">
+      <button class="modal-close" id="invite-close" aria-label="Fechar modal de convite">✕</button>
+      <div class="modal-header">
+        <span class="modal-icon" aria-hidden="true">🔗</span>
+        <div>
+          <h2 class="modal-title">Link de Convite</h2>
+          <p style="font-size:.8rem;color:var(--text-muted);margin-top:2px">Compartilhe com quem você quer convidar</p>
+        </div>
+      </div>
+      <div class="modal-copy" style="margin-bottom:12px">
+        <input type="text" id="invite-link-input" class="pix-input" readonly aria-label="Link de convite" />
+        <button class="btn-copy" id="btn-copy-invite">Copiar</button>
+      </div>
+      <a id="btn-whatsapp" class="btn-whatsapp" href="#" target="_blank" rel="noopener noreferrer">
+        <span aria-hidden="true">📱</span> Enviar pelo WhatsApp
+      </a>
+    </div>
+  </div>
+
+  <!-- Banner de instalação PWA -->
+  <div class="install-banner" id="install-banner" role="complementary" aria-label="Instalar aplicativo">
+    <div class="install-banner-content">
+      <div class="install-banner-icon" aria-hidden="true">📲</div>
+      <div class="install-banner-text">
+        <strong>Instale o app</strong>
+        <span>Acesse sem abrir o browser</span>
+      </div>
+    </div>
+    <button class="btn-install" id="btn-install">Instalar</button>
+    <button class="install-dismiss" id="install-dismiss" aria-label="Fechar banner">✕</button>
   </div>
 
   <script src="app.js"></script>
