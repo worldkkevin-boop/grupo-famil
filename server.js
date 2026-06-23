@@ -84,6 +84,10 @@ db.exec(`
   );
 `);
 
+// Tenta adicionar colunas novas em tabelas existentes (Migrations simples)
+try { db.exec('ALTER TABLE assinaturas ADD COLUMN mes_unico TEXT'); } catch(e) {}
+try { db.exec('ALTER TABLE grupos ADD COLUMN ultima_transacao_mp TEXT'); } catch(e) {}
+
 // Migrations seguras
 for (const col of [
   'ALTER TABLE membros ADD COLUMN email TEXT',
@@ -178,7 +182,6 @@ webpush.setVapidDetails(
 
 // ── Estado Compartilhado ──────────────────────────────────────────────────────
 function getAssinaturas(grupo_id, mes) {
-  try { db.exec('ALTER TABLE assinaturas ADD COLUMN mes_unico TEXT'); } catch(e) {}
   if (!mes) mes = mesAtual();
   return db.prepare('SELECT id, nome, valor_centavos as valor, ativo FROM assinaturas WHERE ativo=1 AND grupo_id=? AND (mes_unico IS NULL OR mes_unico=?) ORDER BY id').all(grupo_id, mes);
 }
@@ -781,10 +784,6 @@ function processarPagamentoSaaS(payment) {
   // Melhor proteção contra duplicidade: criar tabela de transacoes processadas. Mas para simplificar agora,
   // vamos assumir que o webhook e o polling podem correr em paralelo e bater 2 vezes.
   // Vamos salvar a transação processada no grupo para evitar double-crediting.
-  try {
-    db.exec('ALTER TABLE grupos ADD COLUMN ultima_transacao_mp TEXT');
-  } catch(e) {} // Ignora se já existir
-  
   const txnCheck = db.prepare('SELECT ultima_transacao_mp FROM grupos WHERE id=?').get(grupo_id);
   if (txnCheck && txnCheck.ultima_transacao_mp === String(payment.id)) return; // Já processado
 
