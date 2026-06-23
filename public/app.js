@@ -15,7 +15,9 @@ const mesLabel = mes => {
 let state = { membros: [], mes: '', total: 0, selectedMembro: null, isAdmin: false };
 const getAuthHeaders = () => {
   const token = localStorage.getItem('userToken');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
 };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -385,27 +387,6 @@ async function removerMembro(membro_id) {
     alert(err.message || 'Erro ao remover membro');
   }
 }
-
-window.handleGoogleAdminLogin = async (response) => {
-  try {
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ google_id_token: response.credential })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      localStorage.setItem('adminToken', data.token);
-      alert(`Bem-vindo, Admin ${data.nome}!`);
-      $('admin-overlay').classList.remove('active');
-      await loadStatus();
-      $('admin-settings-overlay').classList.add('active'); // Abre config direto
-    } else {
-      alert(data.erro);
-    }
-  } catch { alert('Erro no login admin'); }
-};
-
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────
 function openModal(id) {
