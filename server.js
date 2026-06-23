@@ -417,6 +417,7 @@ app.get('/api/superadmin/kpis', (req, res) => {
     ativos: ativos,
     mrr_estimado: ativos * VALOR_MENSALIDADE
   });
+});
 
 app.delete('/api/superadmin/grupos/:id', (req, res) => {
   const session = getSession(req);
