@@ -190,6 +190,26 @@ async function loadStatus() {
     state.mes     = data.mes;
     state.total   = data.total_centavos;
     state.isAdmin = data.isAdmin || false;
+    
+    // Configura datas do SaaS
+    if (data.saas_pago_ate || data.saas_data_criacao) {
+      let dataFinal;
+      if (data.saas_pago_ate) {
+        dataFinal = new Date(data.saas_pago_ate);
+      } else {
+        // Se for trial, são 7 dias após a criação
+        dataFinal = new Date(data.saas_data_criacao);
+        dataFinal.setDate(dataFinal.getDate() + 7);
+      }
+      
+      const strData = dataFinal.toLocaleDateString('pt-BR');
+      $('saas-badge').textContent = `Ativo até ${strData}`;
+      $('saas-badge').classList.remove('hidden');
+      
+      const p = $('plano-ativo-ate');
+      if (p) p.textContent = strData;
+    }
+    
     render(data);
   } catch (err) {
     console.error('Erro ao carregar status:', err);
@@ -507,6 +527,66 @@ $('btn-saas-gerar-pix')?.addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = '⚡ Gerar Pix (R$ 4,90)';
   }
+});
+
+// Upgrade Pix Copy
+$('btn-copy-upgrade-pix')?.addEventListener('click', () => {
+  const t = $('upgrade-pix-code');
+  if (t && t.value) {
+    navigator.clipboard.writeText(t.value);
+    const b = $('btn-copy-upgrade-pix');
+    b.textContent = '✓ Copiado!';
+    setTimeout(() => b.textContent = 'Copiar Chave', 2000);
+  }
+});
+
+// Botões de Plano
+document.querySelectorAll('.btn-renovar-plano').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const plano = e.currentTarget.dataset.plano;
+    const allBtns = document.querySelectorAll('.btn-renovar-plano');
+    allBtns.forEach(b => b.disabled = true);
+    
+    try {
+      const res = await fetch('/api/saas/pagar', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ plano })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.erro || 'Erro ao gerar Pix');
+      
+      $('upgrade-qr-img').src = `data:image/png;base64,${data.qr_code_base64}`;
+      $('upgrade-pix-code').value = data.qr_code;
+      $('upgrade-pix-result').classList.remove('hidden');
+      
+      // Esconder botões de plano
+      allBtns.forEach(b => b.classList.add('hidden'));
+      
+      // Polling
+      let pollingTries = 0;
+      const interval = setInterval(async () => {
+        try {
+          const check = await fetch(`/api/saas/verificar/${data.payment_id}`, { headers: getAuthHeaders() });
+          const checkData = await check.json();
+          
+          if (checkData.status === 'approved') {
+            clearInterval(interval);
+            alert('Pagamento aprovado! Plano renovado com sucesso.');
+            location.reload();
+          } else {
+            pollingTries++;
+            if (pollingTries > 60) clearInterval(interval);
+          }
+        } catch(e) {}
+      }, 3000);
+      
+    } catch(err) {
+      alert(err.message);
+      allBtns.forEach(b => b.disabled = false);
+    }
+  });
 });
 
 // ── Marcar pago ───────────────────────────────────────────────────────────────

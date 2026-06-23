@@ -92,7 +92,8 @@
         <span class="brand-icon" aria-hidden="true">👨‍👩‍👧‍👦</span>
         <div>
           <h1 class="brand-title">Grupo FAMIl</h1>
-          <p class="brand-sub">Assinaturas Compartilhadas <span style="opacity: 0.5;">(v3.4)</span></p>
+          <p class="brand-sub" style="margin-bottom:4px;">Assinaturas Compartilhadas <span style="opacity: 0.5;">(v3.4)</span></p>
+          <div id="saas-badge" class="hidden" style="font-size:0.7rem; background:rgba(16,185,129,0.15); color:var(--success); padding:3px 8px; border-radius:12px; display:inline-block; font-weight:600;">Ativo até --/--/----</div>
         </div>
       </div>
       <div class="header-info">
@@ -268,6 +269,34 @@
         <button id="btn-save-config" class="btn-main" style="width:100%; padding:12px; border-radius:8px; margin-top:16px;">Salvar Configurações</button>
       </div>
 
+      <!-- Plano do App -->
+      <div style="padding-top: 24px; border-top: 1px solid var(--border); margin-bottom: 24px;">
+        <h3 style="font-size: 0.95rem; margin-bottom: 8px; color: var(--text);">Plano do App</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Seu sistema está ativo até <strong id="plano-ativo-ate" style="color:var(--success);">--/--/----</strong>. Você pode renovar ou fazer upgrade do plano antecipadamente abaixo.</p>
+        
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+          <button class="btn-renovar-plano" data-plano="mensal" style="width:100%; padding:10px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer; text-align:left; display:flex; justify-content:space-between;">
+            <span>Mensal (+30 dias)</span>
+            <strong style="color:var(--success);">R$ 4,90</strong>
+          </button>
+          <button class="btn-renovar-plano" data-plano="semestral" style="width:100%; padding:10px; background:var(--bg); border:1px solid var(--primary); color:var(--text); border-radius:8px; cursor:pointer; text-align:left; display:flex; justify-content:space-between;">
+            <span>Semestral (+180 dias)</span>
+            <strong style="color:var(--success);">R$ 24,90</strong>
+          </button>
+          <button class="btn-renovar-plano" data-plano="anual" style="width:100%; padding:10px; background:rgba(139,92,246,0.1); border:1px solid var(--primary); color:var(--text); border-radius:8px; cursor:pointer; text-align:left; display:flex; justify-content:space-between;">
+            <span>Anual (+365 dias)</span>
+            <strong style="color:var(--primary);">R$ 44,90</strong>
+          </button>
+        </div>
+        
+        <div id="upgrade-pix-result" class="hidden" style="display:flex; flex-direction:column; align-items:center; background:rgba(0,0,0,0.2); padding:16px; border-radius:8px;">
+          <p style="font-size:0.8rem; margin-bottom:8px;">Pague o Pix para renovar automaticamente:</p>
+          <img id="upgrade-qr-img" src="" alt="QR Code" style="width:150px; height:150px; border-radius:8px; margin-bottom:12px; background:#fff; padding:4px;">
+          <textarea id="upgrade-pix-code" readonly style="width:100%; height:50px; background:var(--bg); border:1px solid var(--border); color:var(--success); padding:8px; border-radius:8px; font-size:0.75rem; resize:none; margin-bottom:8px;"></textarea>
+          <button id="btn-copy-upgrade-pix" class="btn-main" style="width:100%; padding:8px; font-weight:600;">Copiar Chave</button>
+        </div>
+      </div>
+
       <!-- Notificações -->
       <div style="padding-top: 24px; border-top: 1px solid var(--border);">
         <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text);">Notificações Push</h3>
@@ -281,6 +310,6 @@
   </div>
 
 
-  <script src="app.js?v=6.11"></script>
+  <script src="app.js?v=6.12"></script>
 </body>
 </html>

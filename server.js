@@ -348,6 +348,8 @@ app.get('/api/status', (req, res) => {
   res.json({
     loggedIn: true,
     saas_bloqueado,
+    saas_pago_ate: grupo.saas_pago_ate,
+    saas_data_criacao: grupo.data_criacao,
     mes,
     total_centavos: total,
     assinaturas,
@@ -727,12 +729,86 @@ app.post('/api/admin/config', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Helper para Processar Pagamento SaaS ──────────────────────────────────────
+function processarPagamentoSaaS(payment) {
+  if (payment.status !== 'approved' || !payment.external_reference) return;
+  
+  const parts = payment.external_reference.split('|');
+  const grupo_id = parseInt(parts[0], 10);
+  const plano = parts[1] || 'mensal';
+  
+  const grupo = db.prepare('SELECT saas_pago_ate FROM grupos WHERE id=?').get(grupo_id);
+  if (!grupo) return;
+
+  let dias = 30;
+  let valorCentavos = 490;
+  if (plano === 'semestral') { dias = 180; valorCentavos = 2490; }
+  else if (plano === 'anual') { dias = 365; valorCentavos = 4490; }
+
+  let baseDate = new Date();
+  const agora = new Date();
+  
+  // Se ainda temos tempo no futuro, adicionamos dias à data futura
+  if (grupo.saas_pago_ate) {
+    const current = new Date(grupo.saas_pago_ate);
+    if (current > agora) {
+      baseDate = current;
+      // Pequeno hack para não processar duplicado no webhook e polling:
+      // se a diferença for maior que os dias que estamos adicionando agora, 
+      // ignoramos pois já foi processado. (Simples proteção contra concorrência)
+      const diffDiasRestantes = (current - agora) / (1000 * 60 * 60 * 24);
+      if (diffDiasRestantes > (dias - 1) && diffDiasRestantes < (dias + 2)) {
+         // O polling e o webhook estão batendo ao mesmo tempo. 
+         // O primeiro que adicionou "dias" deixou o saldo em "dias restantes".
+         // Ignoramos a segunda batida.
+         // Obs: Isso não é à prova de balas se ele renovar de novo imediatamente, mas serve.
+         // Retornar early é arriscado se ele renovou e tinha 1 dia, agora tem 31...
+         // Vamos apenas aplicar a atualização da data com base no current (que é o que era antes + dias na requisição anterior? Não, se foi atualizado, 'current' já tem os dias).
+         // Para simplificar: atualizamos a data só uma vez por transaction ID. Como não temos tabela de transactions, usaremos `payment.id` no DB se quisermos perfeição.
+         // Mas como só vamos atualizar:
+      }
+    } else {
+      baseDate = agora;
+    }
+  } else {
+    baseDate = agora;
+  }
+
+  // Melhor proteção contra duplicidade: criar tabela de transacoes processadas. Mas para simplificar agora,
+  // vamos assumir que o webhook e o polling podem correr em paralelo e bater 2 vezes.
+  // Vamos salvar a transação processada no grupo para evitar double-crediting.
+  try {
+    db.exec('ALTER TABLE grupos ADD COLUMN ultima_transacao_mp TEXT');
+  } catch(e) {} // Ignora se já existir
+  
+  const txnCheck = db.prepare('SELECT ultima_transacao_mp FROM grupos WHERE id=?').get(grupo_id);
+  if (txnCheck && txnCheck.ultima_transacao_mp === String(payment.id)) return; // Já processado
+
+  baseDate.setDate(baseDate.getDate() + dias);
+  db.prepare('UPDATE grupos SET saas_pago_ate=?, ultima_transacao_mp=? WHERE id=?').run(baseDate.toISOString(), String(payment.id), grupo_id);
+  console.log(`✅ SaaS Pago [${plano}]: Grupo ${grupo_id} renovado até ${baseDate.toISOString()}`);
+  
+  // Dividir pra galera
+  const existing = db.prepare("SELECT id FROM assinaturas WHERE nome LIKE 'App Grupo FAMIl%' AND grupo_id=?").get(grupo_id);
+  if (!existing) {
+    db.prepare("INSERT INTO assinaturas (grupo_id, nome, valor_centavos, ativo) VALUES (?, 'App Grupo FAMIl', ?, 1)").run(grupo_id, valorCentavos);
+  } else {
+    db.prepare("UPDATE assinaturas SET valor_centavos=?, ativo=1 WHERE id=?").run(valorCentavos, existing.id);
+  }
+}
+
 // ── API: Pagamento SaaS (Mercado Pago) ────────────────────────────────────────
 app.post('/api/saas/pagar', async (req, res) => {
   const session = getSession(req);
   if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
 
   if (!MERCADOPAGO_ACCESS_TOKEN) return res.status(500).json({ erro: 'Token do Mercado Pago não configurado no servidor' });
+
+  const { plano } = req.body;
+  let amount = 4.90;
+  let desc = 'Assinatura FAMIl SaaS - Mensal';
+  if (plano === 'semestral') { amount = 24.90; desc = 'Assinatura FAMIl SaaS - Semestral'; }
+  else if (plano === 'anual') { amount = 44.90; desc = 'Assinatura FAMIl SaaS - Anual'; }
 
   try {
     const donoEmail = db.prepare('SELECT dono_email FROM grupos WHERE id=?').get(session.grupo_id)?.dono_email || 'admin@localhost';
@@ -745,11 +821,11 @@ app.post('/api/saas/pagar', async (req, res) => {
         'X-Idempotency-Key': crypto.randomUUID()
       },
       body: JSON.stringify({
-        transaction_amount: 4.90,
+        transaction_amount: amount,
         payment_method_id: 'pix',
         payer: { email: donoEmail },
-        description: 'Assinatura FAMIl SaaS',
-        external_reference: String(session.grupo_id),
+        description: desc,
+        external_reference: `${session.grupo_id}|${plano || 'mensal'}`,
       })
     });
     
@@ -767,28 +843,14 @@ app.post('/api/saas/pagar', async (req, res) => {
 });
 
 app.post('/api/saas/webhook', (req, res) => {
-  res.sendStatus(200); // Responder OK para o MP imediatamente
-  
+  res.sendStatus(200);
   const { type, action, data } = req.body;
   const isPayment = type === 'payment' || (action && action.startsWith('payment.'));
   if (isPayment && data && data.id) {
     fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
       headers: { 'Authorization': `Bearer ${MERCADOPAGO_ACCESS_TOKEN}` }
     }).then(r => r.json()).then(payment => {
-      if (payment.status === 'approved' && payment.external_reference) {
-        const grupo_id = parseInt(payment.external_reference, 10);
-        const grupo = db.prepare('SELECT saas_pago_ate FROM grupos WHERE id=?').get(grupo_id);
-        if (grupo) {
-          let baseDate = new Date();
-          if (grupo.saas_pago_ate) {
-            const current = new Date(grupo.saas_pago_ate);
-            if (current > baseDate) baseDate = current;
-          }
-          baseDate.setDate(baseDate.getDate() + 30);
-          db.prepare('UPDATE grupos SET saas_pago_ate=? WHERE id=?').run(baseDate.toISOString(), grupo_id);
-          console.log(`✅ Webhook MP: Grupo ${grupo_id} renovado até ${baseDate.toISOString()}`);
-        }
-      }
+      processarPagamentoSaaS(payment);
     }).catch(err => console.error('Erro no Webhook MP:', err));
   }
 });
@@ -804,33 +866,7 @@ app.get('/api/saas/verificar/:id', async (req, res) => {
     });
     const payment = await r.json();
     
-    if (payment.status === 'approved' && payment.external_reference) {
-      const grupo_id = parseInt(payment.external_reference, 10);
-      const grupo = db.prepare('SELECT saas_pago_ate FROM grupos WHERE id=?').get(grupo_id);
-      
-      // Checa se já atualizou (para não somar duplicado no polling)
-      let atualizado = false;
-      if (grupo) {
-        let baseDate = new Date();
-        const agora = new Date();
-        if (grupo.saas_pago_ate) {
-          const current = new Date(grupo.saas_pago_ate);
-          if (current > agora) {
-            // Se já está no futuro, provavelmente o webhook já bateu
-            atualizado = true; 
-          } else {
-            baseDate = current;
-          }
-        }
-        
-        if (!atualizado) {
-          baseDate = agora;
-          baseDate.setDate(baseDate.getDate() + 30);
-          db.prepare('UPDATE grupos SET saas_pago_ate=? WHERE id=?').run(baseDate.toISOString(), grupo_id);
-          console.log(`✅ Polling MP: Grupo ${grupo_id} renovado até ${baseDate.toISOString()}`);
-        }
-      }
-    }
+    processarPagamentoSaaS(payment);
     
     res.json({ status: payment.status });
   } catch(err) {
