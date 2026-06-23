@@ -8,13 +8,14 @@ const path     = require('path');
 const QRCode   = require('qrcode');
 
 const app      = express();
-const PORT     = process.env.PORT     || 4001;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const PORT            = process.env.PORT             || 4001;
+const BASE_URL        = process.env.BASE_URL         || `http://localhost:${PORT}`;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const PIX_KEY  = process.env.PIX_KEY  || '01749132222';
 const PIX_NAME = process.env.PIX_NAME || 'KEVIN SCHWNAKE';
 const PIX_CITY = process.env.PIX_CITY || 'LARANJAL DO JARI';
 
-// ── Assinaturas (valores em centavos) ────────────────────────────────────────
+// ── Assinaturas (centavos) ────────────────────────────────────────────────────
 const ASSINATURAS = [
   { nome: 'Google AI Pro 5TB',       valor: 4849 },
   { nome: 'YouTube Premium Família', valor: 5390 },
@@ -40,29 +41,25 @@ db.exec(`
   );
 `);
 
-// Migration segura: colunas de convite
+// Migrations seguras
 for (const col of [
   'ALTER TABLE membros ADD COLUMN email TEXT',
   'ALTER TABLE membros ADD COLUMN convite_token TEXT',
   'ALTER TABLE membros ADD COLUMN convite_usado INTEGER DEFAULT 0',
+  'ALTER TABLE membros ADD COLUMN foto_url TEXT',
+  'ALTER TABLE membros ADD COLUMN google_sub TEXT',
 ]) { try { db.exec(col); } catch {} }
 
 // Seed inicial
 const { cnt } = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
 if (cnt === 0) {
   const ins = db.prepare('INSERT INTO membros (nome, ativo) VALUES (?, ?)');
-  [
-    ['Kevin',    1],
-    ['Gaby',     1],
-    ['Membro 3', 0],
-    ['Membro 4', 0],
-    ['Membro 5', 0],
-    ['Membro 6', 0],
-  ].forEach(([n, a]) => ins.run(n, a));
+  [['Kevin',1],['Gaby',1],['Membro 3',0],['Membro 4',0],['Membro 5',0],['Membro 6',0]]
+    .forEach(([n, a]) => ins.run(n, a));
   console.log('✅  Membros iniciais inseridos.');
 }
 
-// ── Pix EMV/BR Code ───────────────────────────────────────────────────────────
+// ── Pix EMV ───────────────────────────────────────────────────────────────────
 function crc16(str) {
   let crc = 0xFFFF;
   for (const ch of str) {
@@ -74,15 +71,15 @@ function crc16(str) {
   }
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
-function tlv(id, value) { return `${id}${String(value.length).padStart(2, '0')}${value}`; }
-function semAcentos(str) { return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); }
-function gerarPix(valorCentavos) {
-  const valor  = (valorCentavos / 100).toFixed(2);
-  const nome   = semAcentos(PIX_NAME).substring(0, 25);
-  const cidade = semAcentos(PIX_CITY).substring(0, 15);
-  const info   = tlv('00', 'br.gov.bcb.pix') + tlv('01', PIX_KEY) + tlv('02', 'Assinaturas FAMIl');
-  const body   = tlv('00','01') + tlv('26',info) + tlv('52','0000') + tlv('53','986') + tlv('54',valor) + tlv('58','BR') + tlv('59',nome) + tlv('60',cidade) + tlv('62',tlv('05','***'));
-  return body + tlv('63', crc16(body + '6304'));
+function tlv(id, v) { return `${id}${String(v.length).padStart(2,'0')}${v}`; }
+function semAcentos(s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase(); }
+function gerarPix(centavos) {
+  const v = (centavos/100).toFixed(2);
+  const n = semAcentos(PIX_NAME).substring(0,25);
+  const c = semAcentos(PIX_CITY).substring(0,15);
+  const info = tlv('00','br.gov.bcb.pix')+tlv('01',PIX_KEY)+tlv('02','Assinaturas FAMIl');
+  const body = tlv('00','01')+tlv('26',info)+tlv('52','0000')+tlv('53','986')+tlv('54',v)+tlv('58','BR')+tlv('59',n)+tlv('60',c)+tlv('62',tlv('05','***'));
+  return body + tlv('63', crc16(body+'6304'));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -100,14 +97,26 @@ function calcularCotas(membros) {
   });
 }
 
+// Verificar ID token Google via tokeninfo (sem dependência extra — fetch nativo Node 18+)
+async function verificarTokenGoogle(id_token) {
+  const res  = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`);
+  const info = await res.json();
+  if (!res.ok || info.error_description) throw new Error(info.error_description || 'Token Google inválido');
+  if (GOOGLE_CLIENT_ID && info.aud !== GOOGLE_CLIENT_ID) throw new Error('Token não pertence a este app');
+  return info; // { sub, name, email, picture, ... }
+}
+
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Página de convite (rota antes do static não pegar)
 app.get('/convite/:token', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'convite.html'))
 );
+
+// ── API: Config pública (client_id não é segredo) ─────────────────────────────
+app.get('/api/config', (_req, res) => {
+  res.json({ google_client_id: GOOGLE_CLIENT_ID });
+});
 
 // ── API: Status ───────────────────────────────────────────────────────────────
 app.get('/api/status', (req, res) => {
@@ -128,10 +137,7 @@ app.post('/api/pix', async (req, res) => {
     return res.status(400).json({ erro: 'valor_centavos inválido' });
   const payload = gerarPix(valor_centavos);
   try {
-    const qr_base64 = await QRCode.toDataURL(payload, {
-      width: 280, margin: 2,
-      color: { dark: '#12122a', light: '#ffffff' },
-    });
+    const qr_base64 = await QRCode.toDataURL(payload, { width:280, margin:2, color:{dark:'#12122a',light:'#ffffff'} });
     res.json({ payload, qr_base64 });
   } catch { res.status(500).json({ erro: 'Erro ao gerar QR Code' }); }
 });
@@ -160,30 +166,52 @@ app.post('/api/despagar', (req, res) => {
 app.post('/api/convite/gerar', (req, res) => {
   const { membro_id } = req.body;
   const membro = db.prepare('SELECT * FROM membros WHERE id=?').get(membro_id);
-  if (!membro || membro.ativo)
-    return res.status(400).json({ erro: 'Slot inválido ou já ocupado' });
+  if (!membro || membro.ativo) return res.status(400).json({ erro: 'Slot inválido ou já ocupado' });
   const token = crypto.randomBytes(16).toString('hex');
   db.prepare('UPDATE membros SET convite_token=?, convite_usado=0 WHERE id=?').run(token, membro_id);
   res.json({ link: `${BASE_URL}/convite/${token}` });
 });
 
 app.get('/api/convite/:token', (req, res) => {
-  const membro = db.prepare('SELECT id, convite_usado, ativo FROM membros WHERE convite_token=?').get(req.params.token);
-  if (!membro) return res.status(404).json({ erro: 'Convite inválido ou expirado' });
-  if (membro.convite_usado || membro.ativo) return res.json({ usado: true });
+  const m = db.prepare('SELECT id, convite_usado, ativo FROM membros WHERE convite_token=?').get(req.params.token);
+  if (!m) return res.status(404).json({ erro: 'Convite inválido ou expirado' });
+  if (m.convite_usado || m.ativo) return res.json({ usado: true });
   res.json({ valido: true });
 });
 
-app.post('/api/convite/aceitar', (req, res) => {
-  const { token, nome, email } = req.body;
-  if (!nome?.trim() || !email?.trim())
-    return res.status(400).json({ erro: 'Nome e e-mail são obrigatórios' });
+// Aceitar convite — suporta Google OAuth OU form manual (fallback)
+app.post('/api/convite/aceitar', async (req, res) => {
+  const { token, google_id_token, nome: nomeManual, email: emailManual } = req.body;
+
   const membro = db.prepare('SELECT * FROM membros WHERE convite_token=?').get(token);
-  if (!membro) return res.status(404).json({ erro: 'Convite inválido ou expirado' });
-  if (membro.convite_usado || membro.ativo) return res.status(400).json({ erro: 'Este convite já foi usado' });
-  db.prepare('UPDATE membros SET nome=?, email=?, ativo=1, convite_usado=1 WHERE id=?')
-    .run(nome.trim(), email.trim().toLowerCase(), membro.id);
-  res.json({ ok: true, nome: nome.trim() });
+  if (!membro)              return res.status(404).json({ erro: 'Convite inválido ou expirado' });
+  if (membro.convite_usado || membro.ativo) return res.status(400).json({ erro: 'Convite já utilizado' });
+
+  let nome, email, foto_url = null, google_sub = null;
+
+  if (google_id_token) {
+    // Fluxo Google
+    try {
+      const info = await verificarTokenGoogle(google_id_token);
+      nome       = info.name  || info.email.split('@')[0];
+      email      = info.email;
+      foto_url   = info.picture || null;
+      google_sub = info.sub;
+    } catch (e) {
+      return res.status(401).json({ erro: `Autenticação Google falhou: ${e.message}` });
+    }
+  } else if (nomeManual?.trim() && emailManual?.trim()) {
+    // Fallback manual (sem Client ID configurado)
+    nome  = nomeManual.trim();
+    email = emailManual.trim().toLowerCase();
+  } else {
+    return res.status(400).json({ erro: 'Autenticação necessária' });
+  }
+
+  db.prepare('UPDATE membros SET nome=?, email=?, foto_url=?, google_sub=?, ativo=1, convite_usado=1 WHERE id=?')
+    .run(nome, email, foto_url, google_sub, membro.id);
+
+  res.json({ ok: true, nome, foto_url });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

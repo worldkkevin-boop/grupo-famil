@@ -284,6 +284,16 @@ body {
   background: hsl(var(--hue), 55%, 40%);
   box-shadow: 0 0 18px hsla(var(--hue), 55%, 40%, 0.5);
 }
+/* Foto de perfil Google */
+.member-photo {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(124,58,237,0.4), 0 4px 16px rgba(0,0,0,0.4);
+}
+
 .member-info {
   display: flex;
   flex-direction: column;

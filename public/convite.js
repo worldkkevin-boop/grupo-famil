@@ -1,59 +1,175 @@
 'use strict';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const token = location.pathname.split('/').pop();
-
-function showState(id) {
-  document.querySelectorAll('.state').forEach(el => el.classList.remove('active'));
-  $(id).classList.add('active');
-}
-
-// ── PWA Install ───────────────────────────────────────────────────────────────
-let deferredPrompt = null;
+let googleClientId  = '';
+let deferredPrompt  = null;
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
 });
 
+// ── Trocar de state ───────────────────────────────────────────────────────────
+function showState(id) {
+  document.querySelectorAll('.state').forEach(el => el.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+// ── Aguardar Google GSI carregar ──────────────────────────────────────────────
+function waitForGoogle(ms = 6000) {
+  return new Promise(resolve => {
+    if (window.google?.accounts) { resolve(true); return; }
+    const start = Date.now();
+    const check = setInterval(() => {
+      if (window.google?.accounts) { clearInterval(check); resolve(true); }
+      else if (Date.now() - start > ms) { clearInterval(check); resolve(false); }
+    }, 100);
+  });
+}
+
+// ── Renderizar botão Google ───────────────────────────────────────────────────
+async function renderGoogleBtn() {
+  const loaded = await waitForGoogle();
+  if (!loaded || !googleClientId) {
+    // Sem GSI ou sem Client ID → form manual
+    $('google-btn-wrap').classList.add('hidden');
+    $('convite-form').classList.remove('hidden');
+    setupManualForm();
+    return;
+  }
+
+  google.accounts.id.initialize({
+    client_id:   googleClientId,
+    callback:    handleGoogleCredential,
+    auto_select: false,
+    context:     'signin',
+  });
+
+  google.accounts.id.renderButton($('g-signin-btn'), {
+    theme:  'filled_dark',
+    size:   'large',
+    shape:  'pill',
+    text:   'signin_with',
+    locale: 'pt-BR',
+    width:  Math.min(window.innerWidth - 80, 300),
+  });
+}
+
+// ── Callback do Google Sign-In ────────────────────────────────────────────────
+async function handleGoogleCredential(response) {
+  showState('state-processing');
+
+  try {
+    const res  = await fetch('/api/convite/aceitar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ token, google_id_token: response.credential }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.erro) {
+      showState('state-form');
+      alert(data.erro || 'Erro ao entrar no grupo. Tente novamente.');
+      return;
+    }
+
+    showSuccess(data.nome, data.foto_url);
+  } catch {
+    showState('state-form');
+    alert('Erro de conexão. Tente novamente.');
+  }
+}
+
+// ── Formulário manual (fallback) ──────────────────────────────────────────────
+function setupManualForm() {
+  $('convite-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const nome  = $('input-nome').value.trim();
+    const email = $('input-email').value.trim();
+    const err   = $('form-error');
+
+    err.classList.add('hidden');
+    if (!nome)  { err.textContent = 'Informe seu nome.'; err.classList.remove('hidden'); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      err.textContent = 'Informe um e-mail válido.'; err.classList.remove('hidden'); return;
+    }
+
+    $('btn-submit').disabled    = true;
+    $('btn-submit').textContent = 'Entrando...';
+    showState('state-processing');
+
+    try {
+      const res  = await fetch('/api/convite/aceitar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, nome, email }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.erro) {
+        showState('state-form');
+        $('form-error').textContent = data.erro || 'Erro ao entrar.';
+        $('form-error').classList.remove('hidden');
+        $('btn-submit').disabled    = false;
+        $('btn-submit').textContent = 'Entrar no grupo →';
+        return;
+      }
+      showSuccess(data.nome, null);
+    } catch {
+      showState('state-form');
+      $('btn-submit').disabled    = false;
+      $('btn-submit').textContent = 'Entrar no grupo →';
+    }
+  });
+}
+
+// ── Exibir sucesso ────────────────────────────────────────────────────────────
+function showSuccess(nome, fotoUrl) {
+  $('success-name').textContent = `Bem-vindo(a), ${nome}!`;
+
+  if (fotoUrl) {
+    const img   = $('success-photo');
+    img.src     = fotoUrl;
+    img.classList.remove('hidden');
+    $('success-emoji').classList.add('hidden');
+  }
+
+  showState('state-success');
+  setupInstallUI();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+}
+
+// ── UI de instalação ──────────────────────────────────────────────────────────
 function setupInstallUI() {
   const isIOS        = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const isAndroid    = /Android/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone === true ||
     window.matchMedia('(display-mode: standalone)').matches;
 
-  if (isStandalone) {
-    $('install-done').classList.remove('hidden');
-    return;
-  }
+  if (isStandalone) { $('install-done').classList.remove('hidden'); return; }
 
-  if (isIOS) {
-    $('install-ios').classList.remove('hidden');
-    return;
-  }
+  if (isIOS) { $('install-ios').classList.remove('hidden'); return; }
 
-  if (deferredPrompt || isAndroid) {
+  if (deferredPrompt) {
     $('install-android').classList.remove('hidden');
     $('btn-install-pwa').addEventListener('click', async () => {
-      if (!deferredPrompt) {
-        // Android sem prompt ainda — mostra instrução
-        $('install-android').innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">Abra o menu do Chrome (⋮) e toque em <strong>"Adicionar à tela inicial"</strong>.</p>';
-        return;
-      }
       deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+      const { outcome } = await deferredPrompt.userChoice;
       deferredPrompt = null;
-      $('install-android').innerHTML = '<p style="font-size:.85rem;color:#10b981;text-align:center">✅ App instalado! Procure pelo ícone FAMIl na sua tela.</p>';
+      $('install-android').innerHTML =
+        outcome === 'accepted'
+          ? '<p style="font-size:.82rem;color:#10b981;text-align:center">✅ App instalado!</p>'
+          : '<p style="font-size:.82rem;color:var(--text-muted);text-align:center">Pode instalar depois pelo menu do browser.</p>';
     });
     return;
   }
 
-  // Desktop ou outro
   $('install-done').classList.remove('hidden');
 }
 
-// ── Validar token ─────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   if (!token || token === 'convite') {
     showState('state-invalid');
@@ -61,96 +177,34 @@ async function init() {
   }
 
   try {
-    const res  = await fetch(`/api/convite/${token}`);
-    const data = await res.json();
+    // Buscar config e validar convite em paralelo
+    const [configRes, conviteRes] = await Promise.all([
+      fetch('/api/config'),
+      fetch(`/api/convite/${token}`),
+    ]);
 
-    if (!res.ok || data.erro) {
-      $('error-detail').textContent = data.erro || 'Convite inválido ou expirado.';
+    const config  = await configRes.json();
+    const convite = await conviteRes.json();
+
+    googleClientId = config.google_client_id || '';
+
+    if (!conviteRes.ok || convite.erro) {
+      $('error-detail').textContent = convite.erro || 'Convite inválido.';
       showState('state-invalid');
       return;
     }
-
-    if (data.usado) {
+    if (convite.usado) {
       $('error-detail').textContent = 'Este convite já foi usado. Peça um novo ao administrador.';
       showState('state-invalid');
       return;
     }
 
     showState('state-form');
+    renderGoogleBtn(); // não aguarda — renderiza em paralelo
   } catch {
     $('error-detail').textContent = 'Erro de conexão. Tente novamente.';
     showState('state-invalid');
   }
 }
 
-// ── Submeter formulário ───────────────────────────────────────────────────────
-$('convite-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const nome  = $('input-nome').value.trim();
-  const email = $('input-email').value.trim();
-  const errEl = $('form-error');
-
-  errEl.classList.add('hidden');
-  errEl.textContent = '';
-
-  if (!nome) {
-    errEl.textContent = 'Informe seu nome.';
-    errEl.classList.remove('hidden');
-    $('input-nome').classList.add('error');
-    $('input-nome').focus();
-    return;
-  }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errEl.textContent = 'Informe um e-mail válido.';
-    errEl.classList.remove('hidden');
-    $('input-email').classList.add('error');
-    $('input-email').focus();
-    return;
-  }
-
-  const btn = $('btn-submit');
-  btn.disabled = true;
-  btn.textContent = 'Entrando...';
-
-  try {
-    const res  = await fetch('/api/convite/aceitar', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ token, nome, email }),
-    });
-    const data = await res.json();
-
-    if (!res.ok || data.erro) {
-      errEl.textContent = data.erro || 'Erro ao entrar no grupo.';
-      errEl.classList.remove('hidden');
-      btn.disabled = false;
-      btn.textContent = 'Entrar no grupo →';
-      return;
-    }
-
-    // Sucesso!
-    $('success-name').textContent = `Bem-vindo(a), ${data.nome}!`;
-    $('btn-go-dashboard').href = '/';
-    showState('state-success');
-    setupInstallUI();
-
-    // Registrar SW
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-
-  } catch {
-    errEl.textContent = 'Erro de conexão. Tente novamente.';
-    errEl.classList.remove('hidden');
-    btn.disabled = false;
-    btn.textContent = 'Entrar no grupo →';
-  }
-});
-
-// Limpar erro ao digitar
-['input-nome', 'input-email'].forEach(id => {
-  $(id)?.addEventListener('input', () => $(id).classList.remove('error'));
-});
-
-// ── Init ──────────────────────────────────────────────────────────────────────
 init();

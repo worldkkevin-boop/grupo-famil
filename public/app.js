@@ -112,6 +112,12 @@ function buildCard(m) {
   // Membro ativo
   const hue     = (m.id * 47) % 360;
   const classes = ['member-card', isPaid ? 'paid' : ''].filter(Boolean).join(' ');
+
+  // Avatar: foto Google ou inicial
+  const avatarHtml = m.foto_url
+    ? `<img src="${m.foto_url}" alt="${m.nome}" class="member-photo" loading="lazy" />`
+    : `<div class="member-avatar" style="--hue:${hue}" aria-hidden="true">${m.nome.charAt(0).toUpperCase()}</div>`;
+
   const actionBtn = !isPaid
     ? `<button class="btn-pix" data-action="pix" data-membro-id="${m.id}" aria-label="Gerar Pix para ${m.nome}">
          <span aria-hidden="true">⚡</span> Gerar Pix
@@ -123,9 +129,7 @@ function buildCard(m) {
   return `
     <div class="${classes}" id="card-${m.id}">
       <div class="card-top">
-        <div class="member-avatar" style="--hue:${hue}" aria-hidden="true">
-          ${m.nome.charAt(0).toUpperCase()}
-        </div>
+        ${avatarHtml}
         <div class="member-info">
           <span class="member-name">${m.nome}</span>
           ${isPaid ? '<span class="paid-badge">✓ Pago</span>' : ''}
