@@ -157,7 +157,9 @@ $('btn-logout')?.addEventListener('click', () => {
 async function loadStatus() {
   try {
     const res = await fetch('/api/status', { headers: getAuthHeaders() });
-    if (res.status === 401) {
+    const data = await res.json();
+    
+    if (res.status === 401 || data.loggedIn === false) {
       localStorage.removeItem('userToken');
       localStorage.removeItem('userRole');
       $('login-view').classList.remove('hidden');
@@ -165,7 +167,6 @@ async function loadStatus() {
       initGoogleSignIn();
       return;
     }
-    const data = await res.json();
     
     $('login-view').classList.add('hidden');
     $('dashboard-view').classList.remove('hidden');

@@ -310,7 +310,7 @@ app.post('/api/login/email', (req, res) => {
 // ── API: Status ───────────────────────────────────────────────────────────────
 app.get('/api/status', (req, res) => {
   const session = getSession(req);
-  if (!session) return res.status(401).json({ erro: 'Não autorizado' });
+  if (!session) return res.json({ loggedIn: false });
 
   const isAdmin = session.role === 'admin';
   const grupo_id = session.grupo_id;
@@ -333,6 +333,7 @@ app.get('/api/status', (req, res) => {
   const modoPagamento = getConfig('modo_pagamento', 'rateio', grupo_id);
 
   res.json({
+    loggedIn: true,
     mes,
     total_centavos: total,
     assinaturas,
