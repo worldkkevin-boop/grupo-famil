@@ -14,7 +14,7 @@ const PIX_CITY = process.env.PIX_CITY || 'SAO PAULO';
 
 // ── Assinaturas (valores em centavos) ────────────────────────────────────────
 const ASSINATURAS = [
-  { nome: 'Google One 2TB',          valor: 4999 },
+  { nome: 'Google AI Pro 5TB',       valor: 4849 },
   { nome: 'YouTube Premium Família', valor: 5390 },
 ];
 const TOTAL_CENTAVOS = ASSINATURAS.reduce((s, a) => s + a.valor, 0); // 10389
