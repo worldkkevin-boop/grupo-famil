@@ -12,6 +12,7 @@ const app      = express();
 const PORT            = process.env.PORT             || 4001;
 const BASE_URL        = process.env.BASE_URL         || `http://localhost:${PORT}`;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const MERCADOPAGO_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || '';
 const ADMIN_EMAIL     = 'worldkkevin@gmail.com';
 const PIX_KEY  = process.env.PIX_KEY  || '01749132222';
 const PIX_NAME = process.env.PIX_NAME || 'KEVIN SCHWNAKE';
@@ -724,6 +725,70 @@ app.post('/api/admin/config', (req, res) => {
   if (modo_pagamento !== undefined) upsert('modo_pagamento', modo_pagamento);
 
   res.json({ ok: true });
+});
+
+// ── API: Pagamento SaaS (Mercado Pago) ────────────────────────────────────────
+app.post('/api/saas/pagar', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
+  if (!MERCADOPAGO_ACCESS_TOKEN) return res.status(500).json({ erro: 'Token do Mercado Pago não configurado no servidor' });
+
+  try {
+    const donoEmail = db.prepare('SELECT dono_email FROM grupos WHERE id=?').get(session.grupo_id)?.dono_email || 'admin@localhost';
+    
+    const response = await fetch('https://api.mercadopago.com/v1/payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${MERCADOPAGO_ACCESS_TOKEN}`,
+        'X-Idempotency-Key': crypto.randomUUID()
+      },
+      body: JSON.stringify({
+        transaction_amount: 4.90,
+        payment_method_id: 'pix',
+        payer: { email: donoEmail },
+        description: 'Assinatura FAMIl SaaS',
+        external_reference: String(session.grupo_id),
+      })
+    });
+    
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Erro ao gerar Pix no MP');
+    
+    const qr_code_base64 = data.point_of_interaction?.transaction_data?.qr_code_base64;
+    const qr_code = data.point_of_interaction?.transaction_data?.qr_code;
+    
+    res.json({ ok: true, qr_code_base64, qr_code });
+  } catch(err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+app.post('/api/saas/webhook', (req, res) => {
+  res.sendStatus(200); // Responder OK para o MP imediatamente
+  
+  const { type, data } = req.body;
+  if (type === 'payment' && data && data.id) {
+    fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
+      headers: { 'Authorization': `Bearer ${MERCADOPAGO_ACCESS_TOKEN}` }
+    }).then(r => r.json()).then(payment => {
+      if (payment.status === 'approved' && payment.external_reference) {
+        const grupo_id = parseInt(payment.external_reference, 10);
+        const grupo = db.prepare('SELECT saas_pago_ate FROM grupos WHERE id=?').get(grupo_id);
+        if (grupo) {
+          let baseDate = new Date();
+          if (grupo.saas_pago_ate) {
+            const current = new Date(grupo.saas_pago_ate);
+            if (current > baseDate) baseDate = current;
+          }
+          baseDate.setDate(baseDate.getDate() + 30);
+          db.prepare('UPDATE grupos SET saas_pago_ate=? WHERE id=?').run(baseDate.toISOString(), grupo_id);
+          console.log(`✅ Webhook MP: Grupo ${grupo_id} renovado até ${baseDate.toISOString()}`);
+        }
+      }
+    }).catch(err => console.error('Erro no Webhook MP:', err));
+  }
 });
 
 // ── API: SaaS Onboarding (Simulação de Checkout) ──────────────────────────────

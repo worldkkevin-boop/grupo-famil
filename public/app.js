@@ -453,12 +453,38 @@ async function copyText(inputId, btnId) {
 $('btn-copy').addEventListener('click', () => copyText('pix-code', 'btn-copy'));
 $('btn-copy-invite').addEventListener('click', () => copyText('invite-link-input', 'btn-copy-invite'));
 $('btn-copy-saas-pix')?.addEventListener('click', () => {
-  const t = document.querySelector('#saas-blocked-view textarea');
-  if (t) {
+  const t = $('saas-pix-code');
+  if (t && t.value) {
     navigator.clipboard.writeText(t.value);
     const b = $('btn-copy-saas-pix');
     b.textContent = '✓ Copiado!';
     setTimeout(() => b.textContent = 'Copiar Chave Pix', 2000);
+  }
+});
+
+$('btn-saas-gerar-pix')?.addEventListener('click', async () => {
+  const btn = $('btn-saas-gerar-pix');
+  btn.disabled = true;
+  btn.textContent = 'Gerando Pix...';
+  
+  try {
+    const res = await fetch('/api/saas/pagar', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    
+    if (!res.ok) throw new Error(data.erro || 'Erro ao gerar Pix');
+    
+    $('saas-qr-img').src = `data:image/png;base64,${data.qr_code_base64}`;
+    $('saas-pix-code').value = data.qr_code;
+    
+    btn.classList.add('hidden');
+    $('saas-pix-result').classList.remove('hidden');
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = '⚡ Gerar Pix (R$ 4,90)';
   }
 });
 
