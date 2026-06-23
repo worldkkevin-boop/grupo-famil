@@ -28,34 +28,48 @@ if ('serviceWorker' in navigator) {
   );
 }
 
-// ── PWA Install prompt ────────────────────────────────────────────────────────
+// ── PWA Strict Blocker ──────────────────────────────────────────────────────
 let deferredPrompt = null;
+
+function checkStandalone() {
+  // Ignora o bloqueio se for o admin logado acessando pelo PC para gerenciar, ou se já estiver standalone
+  // Na verdade, a regra pediu obrigatoriedade, vamos aplicar a todos:
+  const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  
+  if (!isStandalone) {
+    $('pwa-strict-blocker').classList.remove('hidden');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+      $('pwa-blocker-ios').classList.remove('hidden');
+      $('pwa-blocker-android').classList.add('hidden');
+    } else {
+      $('pwa-blocker-android').classList.remove('hidden');
+      $('pwa-blocker-ios').classList.add('hidden');
+    }
+  } else {
+    $('pwa-strict-blocker').classList.add('hidden');
+  }
+}
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
-  if (!sessionStorage.getItem('install-dismissed')) {
-    setTimeout(() => $('install-banner')?.classList.add('visible'), 4000);
+  checkStandalone(); // Re-avalia
+});
+
+$('btn-strict-install')?.addEventListener('click', async () => {
+  if (!deferredPrompt) {
+    alert('A instalação não está disponível ou já foi concluída. Tente abrir pelo menu do navegador (Adicionar à Tela Inicial).');
+    return;
   }
-});
-
-window.addEventListener('appinstalled', () => {
-  $('install-banner')?.classList.remove('visible');
-  deferredPrompt = null;
-});
-
-$('btn-install')?.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
   deferredPrompt.prompt();
   await deferredPrompt.userChoice;
   deferredPrompt = null;
-  $('install-banner').classList.remove('visible');
 });
 
-$('install-dismiss')?.addEventListener('click', () => {
-  $('install-banner').classList.remove('visible');
-  sessionStorage.setItem('install-dismissed', '1');
-});
+// Checa no carregamento e se a tela mudar de modo
+window.addEventListener('DOMContentLoaded', checkStandalone);
+window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
 
 // ── Carregar status ───────────────────────────────────────────────────────────
 async function loadStatus() {

@@ -548,6 +548,15 @@ body {
   .member-cota  { font-size: 1.5rem; }
   .progress-section { padding: 18px; }
 }
+@media (max-width: 480px) {
+  .header-inner { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .header-info { width: 100%; justify-content: flex-start; flex-wrap: nowrap; }
+  .stat-pill { flex: 1; align-items: flex-start; }
+  .btn-admin-icon { margin-right: auto; }
+
+  .modal { padding: 24px 20px; width: calc(100% - 32px); }
+  .modal-amount { font-size: 1.7rem; }
+}
 @media (max-width: 400px) {
   .members-grid { grid-template-columns: 1fr; }
 }
@@ -623,71 +632,42 @@ body {
   box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
 }
 
-/* ── Install Banner ─────────────────────────────────────────────────────────── */
-.install-banner {
+/* ── PWA Strict Blocker ─────────────────────────────────────────────────────── */
+.pwa-strict-blocker {
   position: fixed;
-  bottom: 0;
-  left: 0; right: 0;
-  z-index: 200;
-  background: rgba(13, 13, 32, 0.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(124, 58, 237, 0.3);
-  padding: 14px 20px;
-  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  z-index: 99999;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transform: translateY(100%);
-  transition: transform 0.35s var(--ease);
-  box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
 }
-.install-banner.visible { transform: translateY(0); }
+.pwa-strict-blocker.hidden { display: none !important; }
 
-.install-banner-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+.pwa-blocker-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
-.install-banner-icon { font-size: 1.6rem; flex-shrink: 0; }
-.install-banner-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.install-banner-text strong { font-size: 0.9rem; font-weight: 700; }
-.install-banner-text span   { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.btn-install {
-  padding: 9px 18px;
-  background: linear-gradient(135deg, var(--primary), #4f46e5);
+.brand-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--primary), #38bdf8);
   color: #fff;
-  border: none;
-  border-radius: 99px;
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: opacity 0.15s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 800;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
 }
-.btn-install:hover { opacity: 0.9; box-shadow: 0 4px 16px rgba(124,58,237,0.45); }
-
-.install-dismiss {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 4px;
-  flex-shrink: 0;
-  transition: color 0.15s;
-}
-.install-dismiss:hover { color: var(--text); }
 
 /* ── Admin ──────────────────────────────────────────────────────────────────── */
 .btn-admin-icon {

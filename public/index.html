@@ -134,17 +134,38 @@
     </div>
   </div>
 
-  <!-- Banner de instalação PWA -->
-  <div class="install-banner" id="install-banner" role="complementary" aria-label="Instalar aplicativo">
-    <div class="install-banner-content">
-      <div class="install-banner-icon" aria-hidden="true">📲</div>
-      <div class="install-banner-text">
-        <strong>Instale o app</strong>
-        <span>Acesse sem abrir o browser</span>
+  <!-- Banner de instalação PWA (agora tela cheia obrigatória) -->
+  <div class="pwa-strict-blocker hidden" id="pwa-strict-blocker">
+    <div class="pwa-blocker-content">
+      <div class="brand-logo" style="margin: 0 auto 20px;">F</div>
+      <h2 style="font-size: 1.4rem; margin-bottom: 12px; font-weight: 800;">Instalação Obrigatória</h2>
+      <p style="color: var(--text-soft); font-size: 0.95rem; line-height: 1.5; margin-bottom: 24px;">
+        Para acessar o painel e receber notificações de pagamento, é necessário instalar o aplicativo no seu celular.
+      </p>
+
+      <div id="pwa-blocker-android" class="hidden">
+        <button class="btn-main" id="btn-strict-install" style="width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), #4f46e5); color: #fff; border: none; border-radius: 12px; font-weight: 700; cursor: pointer;">
+          <span aria-hidden="true">📲</span> Instalar Aplicativo Agora
+        </button>
       </div>
+
+      <div id="pwa-blocker-ios" class="hidden" style="text-align: left; background: rgba(255,255,255,0.05); padding: 18px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+        <h3 style="font-size: 0.9rem; margin-bottom: 12px;">Como instalar no iPhone:</h3>
+        <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px;">
+          <li style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; color: var(--text-soft);">
+            <span style="width:20px;height:20px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">1</span>
+            Toque no botão Compartilhar na barra do Safari
+          </li>
+          <li style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; color: var(--text-soft);">
+            <span style="width:20px;height:20px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">2</span>
+            Toque em <strong>"Adicionar à Tela de Início"</strong>
+          </li>
+        </ul>
+      </div>
+      <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 24px;">
+        Se você já instalou, abra pelo ícone salvo na sua tela inicial.
+      </p>
     </div>
-    <button class="btn-install" id="btn-install">Instalar</button>
-    <button class="install-dismiss" id="install-dismiss" aria-label="Fechar banner">✕</button>
   </div>
 
   <!-- Modal Admin -->
