@@ -95,6 +95,7 @@ for (const col of [
   'ALTER TABLE config ADD COLUMN grupo_id INTEGER DEFAULT 1',
   'ALTER TABLE grupos ADD COLUMN senha_hash TEXT',
   'ALTER TABLE membros ADD COLUMN senha_hash TEXT',
+  'ALTER TABLE grupos ADD COLUMN saas_pago_ate TEXT',
 ]) { try { db.exec(col); } catch {} }
 
 // Fix do Schema do Config (Migrations)
@@ -349,12 +350,73 @@ app.get('/api/superadmin/grupos', (req, res) => {
 
   const grupos = db.prepare(`
     SELECT g.*, 
-           (SELECT COUNT(*) FROM membros m WHERE m.grupo_id = g.id AND m.ativo = 1) as qte_membros 
+           (SELECT COUNT(*) FROM membros m WHERE m.grupo_id = g.id AND m.ativo = 1) as qte_membros,
+           (SELECT COALESCE(SUM(valor_centavos), 0) FROM assinaturas a WHERE a.grupo_id = g.id AND a.ativo = 1) as total_coleta
     FROM grupos g ORDER BY g.id DESC
   `).all();
   
   res.json(grupos);
 });
+
+app.post('/api/superadmin/grupos/:id/renovar', (req, res) => {
+  const session = getSession(req);
+  if (!session || !session.is_superadmin) return res.status(403).json({ erro: 'Não autorizado' });
+
+  const id = req.params.id;
+  const grupo = db.prepare('SELECT saas_pago_ate FROM grupos WHERE id=?').get(id);
+  if (!grupo) return res.status(404).json({ erro: 'Grupo não encontrado' });
+
+  // Calcula a nova data de vencimento: se já está pago no futuro, soma 30 dias na data futura.
+  // Se está vencido ou null, soma 30 dias a partir de hoje.
+  let baseDate = new Date();
+  if (grupo.saas_pago_ate) {
+    const pagoAte = new Date(grupo.saas_pago_ate);
+    if (pagoAte > baseDate) baseDate = pagoAte;
+  }
+  
+  baseDate.setDate(baseDate.getDate() + 30);
+  const novaData = baseDate.toISOString();
+
+  db.prepare('UPDATE grupos SET saas_pago_ate=? WHERE id=?').run(novaData, id);
+  res.json({ ok: true, saas_pago_ate: novaData });
+});
+
+app.get('/api/superadmin/kpis', (req, res) => {
+  const session = getSession(req);
+  if (!session || !session.is_superadmin) return res.status(403).json({ erro: 'Não autorizado' });
+
+  const grupos = db.prepare('SELECT id, data_criacao, saas_pago_ate FROM grupos').all();
+  
+  let totalGrupos = grupos.length;
+  let emTrial = 0;
+  let ativos = 0;
+  const VALOR_MENSALIDADE = 4.90;
+
+  const agora = new Date();
+
+  grupos.forEach(g => {
+    // Se tem saas_pago_ate e está no futuro, é pagante.
+    if (g.saas_pago_ate) {
+      const v = new Date(g.saas_pago_ate);
+      if (v > agora) {
+        ativos++;
+      }
+    } else {
+      // Se não tem saas_pago_ate, validamos o trial de 7 dias via data_criacao
+      const criacao = new Date(g.data_criacao);
+      const diffDias = (agora - criacao) / (1000 * 60 * 60 * 24);
+      if (diffDias <= 7) {
+        emTrial++;
+      }
+    }
+  });
+
+  res.json({
+    total_grupos: totalGrupos,
+    trial: emTrial,
+    ativos: ativos,
+    mrr_estimado: ativos * VALOR_MENSALIDADE
+  });
 
 app.delete('/api/superadmin/grupos/:id', (req, res) => {
   const session = getSession(req);

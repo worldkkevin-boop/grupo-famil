@@ -85,6 +85,17 @@ async function loadDashboard() {
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Carregando...</td></tr>';
 
   try {
+    // Carrega KPIs
+    fetch('/api/superadmin/kpis', { headers: getAuthHeaders() })
+      .then(res => res.json())
+      .then(kpis => {
+        $('kpi-total').textContent = kpis.total_grupos;
+        $('kpi-trial').textContent = kpis.trial;
+        $('kpi-ativos').textContent = kpis.ativos;
+        $('kpi-mrr').textContent = 'R$ ' + kpis.mrr_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      });
+
+    // Carrega Grupos
     const res = await fetch('/api/superadmin/grupos', { headers: getAuthHeaders() });
     if (!res.ok) throw new Error('Falha ao carregar grupos');
     const grupos = await res.json();
@@ -96,23 +107,45 @@ async function loadDashboard() {
       return;
     }
 
+    const agora = new Date();
+
     grupos.forEach(g => {
       const dataCriacao = new Date(g.data_criacao).toLocaleDateString('pt-BR');
+      
+      // Lógica do Status
+      let statusHtml = '';
+      if (g.saas_pago_ate) {
+        const v = new Date(g.saas_pago_ate);
+        if (v > agora) {
+          statusHtml = `<span class="badge badge-ativo">Ativo até ${v.toLocaleDateString('pt-BR')}</span>`;
+        } else {
+          statusHtml = `<span class="badge badge-vencido">Vencido em ${v.toLocaleDateString('pt-BR')}</span>`;
+        }
+      } else {
+        const criacao = new Date(g.data_criacao);
+        const diffDias = (agora - criacao) / (1000 * 60 * 60 * 24);
+        if (diffDias <= 7) {
+          statusHtml = `<span class="badge badge-trial">Trial (Dia ${Math.max(1, Math.floor(diffDias))}/7)</span>`;
+        } else {
+          statusHtml = `<span class="badge badge-vencido">Trial Vencido</span>`;
+        }
+      }
+
+      const totalColeta = (g.total_coleta / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="color:var(--text-muted);">#${g.id}</td>
         <td style="font-weight:600;">${g.nome}</td>
-        <td>${g.dono_email}</td>
-        <td>${g.qte_membros}</td>
         <td>
-          <div style="font-size:0.85rem; color:var(--text-muted);">
-            <div>${g.pix_key}</div>
-            <div>${g.pix_name}</div>
-          </div>
+          <div style="margin-bottom:4px;">${g.dono_email}</div>
+          ${statusHtml}
         </td>
+        <td style="color:var(--success); font-weight:600;">${totalColeta}</td>
+        <td>${g.qte_membros}</td>
         <td>${dataCriacao}</td>
         <td style="text-align:right;">
+          <button class="btn-success" onclick="aprovarPagamento(${g.id})" style="margin-right: 8px;">Aprovar Pgto</button>
           <button class="btn-delete" onclick="excluirGrupo(${g.id})">Deletar</button>
         </td>
       `;
@@ -121,6 +154,21 @@ async function loadDashboard() {
 
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--danger);">${err.message}</td></tr>`;
+  }
+}
+
+async function aprovarPagamento(id) {
+  if (!confirm(`Deseja aprovar e adicionar +30 dias de acesso para o Grupo #${id}?`)) return;
+  
+  try {
+    const res = await fetch(`/api/superadmin/grupos/${id}/renovar`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) throw new Error('Erro ao renovar');
+    loadDashboard();
+  } catch (err) {
+    alert(err.message);
   }
 }
 

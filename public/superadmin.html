@@ -161,6 +161,65 @@
       color: #fff;
     }
 
+    .btn-success {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-success:hover {
+      background: var(--success);
+      color: #fff;
+    }
+
+    /* KPIs */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px;
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .kpi-title {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .kpi-value.green { color: var(--success); }
+    .kpi-value.purple { color: var(--primary); }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-trial { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+    .badge-ativo { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge-vencido { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -195,8 +254,29 @@
     </header>
 
     <main class="content">
-      <h2 style="margin-bottom: 8px;">Clientes (Grupos Cadastrados)</h2>
-      <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom: 24px;">Gerencie as instâncias do sistema FAMIl ativas na sua plataforma.</p>
+      <h2 style="margin-bottom: 8px;">Visão Geral</h2>
+      <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom: 24px;">Panorama do seu negócio SaaS em tempo real.</p>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">Total de Clientes</div>
+          <div class="kpi-value" id="kpi-total">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Em Teste (Trial)</div>
+          <div class="kpi-value purple" id="kpi-trial">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Assinantes Ativos</div>
+          <div class="kpi-value green" id="kpi-ativos">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">MRR Estimado</div>
+          <div class="kpi-value green" id="kpi-mrr">R$ 0,00</div>
+        </div>
+      </div>
+
+      <h2 style="margin-bottom: 16px;">Clientes (Grupos Cadastrados)</h2>
 
       <div class="table-container">
         <table>
@@ -204,11 +284,11 @@
             <tr>
               <th>ID</th>
               <th>Nome do Grupo</th>
-              <th>Dono (E-mail)</th>
+              <th>Dono / Status</th>
+              <th>Volume Gerenciado</th>
               <th>Membros</th>
-              <th>Dados Pix</th>
               <th>Criado em</th>
-              <th style="text-align:right;">Ações</th>
+              <th style="text-align:right;">Ações SaaS</th>
             </tr>
           </thead>
           <tbody id="table-body">
