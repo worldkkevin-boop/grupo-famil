@@ -12,8 +12,8 @@
   
   <style>
     body {
-      background: var(--bg-dark);
-      color: #fff;
+      background: var(--bg);
+      color: var(--text);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -25,31 +25,73 @@
       width: 100%;
       padding: 24px;
       text-align: center;
-      background: rgba(18, 18, 42, 0.8);
-      backdrop-filter: blur(10px);
+      background: rgba(6, 6, 15, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
     .hero {
-      max-width: 600px;
+      width: 100%;
+      max-width: 800px;
       text-align: center;
-      padding: 48px 24px;
+      padding: 64px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
-    .hero h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 16px; background: linear-gradient(135deg, var(--primary), var(--primary-hover)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .hero p { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 32px; line-height: 1.6; }
+    .hero h1 { 
+      font-size: 2.8rem; 
+      font-weight: 800; 
+      margin-bottom: 24px; 
+      line-height: 1.1;
+      background: linear-gradient(135deg, #a78bfa, #7c3aed, #ec4899); 
+      -webkit-background-clip: text; 
+      -webkit-text-fill-color: transparent; 
+    }
+    .hero p { 
+      font-size: 1.15rem; 
+      color: var(--text-soft); 
+      margin-bottom: 48px; 
+      line-height: 1.6; 
+      max-width: 600px;
+    }
     .features {
       display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-      margin-bottom: 48px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 64px;
+      width: 100%;
     }
     .feature-card {
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      text-align: left;
+      border-radius: 20px;
+      padding: 32px 24px;
+      text-align: center;
+      transition: transform 0.2s, background 0.2s, border-color 0.2s;
     }
-    .feature-card h3 { color: var(--primary); margin-bottom: 8px; }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      background: var(--surface-hover);
+      border-color: var(--border-hover);
+    }
+    .feature-card h3 { 
+      color: #fff; 
+      margin-bottom: 12px; 
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .feature-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      color: var(--text-soft);
+    }
     
     /* Modal de Onboarding */
     #onboarding-modal {
@@ -79,9 +121,9 @@
 </head>
 <body>
 
-  <header>
-    <img src="/icon.svg" alt="Logo" style="width:48px; height:48px;">
-    <h2>Grupo FAMIl</h2>
+  <header style="display:flex; justify-content:center; align-items:center; gap:12px;">
+    <img src="/icon.svg" alt="Logo" style="width:36px; height:36px; border-radius:10px;">
+    <h2 style="font-size:1.4rem; font-weight:700; color:#fff; margin:0;">Grupo FAMIl</h2>
   </header>
 
   <main class="hero">
@@ -103,11 +145,14 @@
       </div>
     </div>
 
-    <button onclick="document.getElementById('onboarding-modal').classList.add('active')" class="btn-main" style="font-size: 1.1rem; padding: 16px 32px; border-radius: 32px; font-weight: 700; width: 100%;">
-      Criar Meu Grupo (Teste Grátis)
-    </button>
-    <br><br>
-    <a href="/app" style="color:var(--text-muted); font-size:0.9rem; text-decoration:none;">Já tem um grupo? Fazer Login</a>
+    <div style="width:100%; max-width:400px; display:flex; flex-direction:column; gap:16px;">
+      <button onclick="document.getElementById('onboarding-modal').classList.add('active')" class="btn-main" style="font-size: 1.1rem; padding: 18px 32px; border-radius: 100px; font-weight: 700; width: 100%; box-shadow: 0 8px 32px var(--primary-glow);">
+        Começar Agora (Grátis)
+      </button>
+      <a href="/app" style="color:var(--text-soft); font-size:0.95rem; text-decoration:none; padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:100px; transition:background 0.2s;">
+        Já tem um grupo? Entrar
+      </a>
+    </div>
   </main>
 
   <div id="onboarding-modal">
