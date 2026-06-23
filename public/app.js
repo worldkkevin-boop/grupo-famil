@@ -170,11 +170,7 @@ async function loadStatus() {
     $('login-view').classList.add('hidden');
     $('dashboard-view').classList.remove('hidden');
 
-    if (localStorage.getItem('isSuperadmin') === 'true') {
-      $('btn-superadmin').style.display = 'block';
-    } else {
-      $('btn-superadmin').style.display = 'none';
-    }
+
 
     state.membros = data.membros;
     state.mes     = data.mes;
