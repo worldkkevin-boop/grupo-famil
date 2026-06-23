@@ -657,15 +657,17 @@ body {
   box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
 .brand-logo {
-  width: 64px;
+  width: max-content;
+  min-width: 64px;
+  padding: 0 20px;
   height: 64px;
   border-radius: 20px;
   background: linear-gradient(135deg, var(--primary), #38bdf8);
   color: #fff;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 800;
   box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
 }
