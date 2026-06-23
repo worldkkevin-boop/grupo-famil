@@ -584,7 +584,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const isSuperadmin = (info.email === 'worldkkevin@gmail.com');
+    const isSuperadmin = (info.email.toLowerCase() === 'worldkkevin@gmail.com');
     
     sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome: info.name, is_superadmin: isSuperadmin });
     
