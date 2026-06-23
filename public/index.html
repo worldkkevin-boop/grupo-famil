@@ -19,6 +19,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -40,6 +41,7 @@
         </div>
       </div>
       <div class="header-info">
+        <button id="btn-admin-login" class="btn-admin-icon" aria-label="Login Admin">🔒</button>
         <div class="stat-pill">
           <span class="stat-label">Mês</span>
           <span class="stat-value" id="mes-ref">—</span>
@@ -142,6 +144,34 @@
     <button class="install-dismiss" id="install-dismiss" aria-label="Fechar banner">✕</button>
   </div>
 
+  <!-- Modal Admin -->
+  <div class="modal-overlay" id="admin-overlay" role="dialog" aria-modal="true" aria-label="Login Admin">
+    <div class="modal" style="text-align: center;">
+      <button class="modal-close" id="admin-close" aria-label="Fechar modal admin">✕</button>
+      <h2 class="modal-title" style="margin-bottom: 8px;">Área Restrita</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;">
+        Apenas o administrador (worldkkevin@gmail.com) pode acessar.
+      </p>
+      <div id="admin-gsi-btn" style="display:flex; justify-content:center;"></div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
+  <script>
+    document.getElementById('btn-admin-login').addEventListener('click', async () => {
+      document.getElementById('admin-overlay').classList.add('active');
+      const res = await fetch('/api/config');
+      const { google_client_id } = await res.json();
+      if (google_client_id && window.google) {
+        google.accounts.id.initialize({
+          client_id: google_client_id,
+          callback: window.handleGoogleAdminLogin,
+        });
+        google.accounts.id.renderButton(document.getElementById('admin-gsi-btn'), {
+          theme: 'filled_dark', size: 'large', shape: 'pill'
+        });
+      }
+    });
+  </script>
 </body>
 </html>

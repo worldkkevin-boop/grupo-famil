@@ -11,6 +11,7 @@ const app      = express();
 const PORT            = process.env.PORT             || 4001;
 const BASE_URL        = process.env.BASE_URL         || `http://localhost:${PORT}`;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const ADMIN_EMAIL     = 'worldkkevin@gmail.com';
 const PIX_KEY  = process.env.PIX_KEY  || '01749132222';
 const PIX_NAME = process.env.PIX_NAME || 'KEVIN SCHWNAKE';
 const PIX_CITY = process.env.PIX_CITY || 'LARANJAL DO JARI';
@@ -106,6 +107,13 @@ async function verificarTokenGoogle(id_token) {
   return info; // { sub, name, email, picture, ... }
 }
 
+const adminTokens = new Set();
+function extractAdminToken(req) {
+  const auth = req.headers.authorization;
+  return (auth && auth.startsWith('Bearer ')) ? auth.split(' ')[1] : null;
+}
+
+
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -127,7 +135,9 @@ app.get('/api/status', (req, res) => {
     ...m,
     pago: pagamentos.some(p => p.membro_id === m.id && p.pago === 1),
   }));
-  res.json({ mes, total_centavos: TOTAL_CENTAVOS, assinaturas: ASSINATURAS, membros: comCotas });
+  const token = extractAdminToken(req);
+  const isAdmin = adminTokens.has(token);
+  res.json({ mes, total_centavos: TOTAL_CENTAVOS, assinaturas: ASSINATURAS, membros: comCotas, isAdmin });
 });
 
 // ── API: Pix ──────────────────────────────────────────────────────────────────
@@ -212,6 +222,31 @@ app.post('/api/convite/aceitar', async (req, res) => {
     .run(nome, email, foto_url, google_sub, membro.id);
 
   res.json({ ok: true, nome, foto_url });
+});
+
+// ── API: Admin ────────────────────────────────────────────────────────────────
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const info = await verificarTokenGoogle(req.body.google_id_token);
+    if (info.email !== ADMIN_EMAIL) {
+      return res.status(403).json({ erro: 'Acesso negado. Apenas o administrador pode logar aqui.' });
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    adminTokens.add(token);
+    res.json({ token, nome: info.name });
+  } catch (e) {
+    res.status(401).json({ erro: 'Login falhou' });
+  }
+});
+
+app.post('/api/admin/remover', (req, res) => {
+  const token = extractAdminToken(req);
+  if (!adminTokens.has(token)) return res.status(401).json({ erro: 'Não autorizado' });
+
+  const { membro_id } = req.body;
+  db.prepare("UPDATE membros SET ativo=0, nome='Membro ' || id, email=NULL, foto_url=NULL, google_sub=NULL, convite_usado=0 WHERE id=?")
+    .run(membro_id);
+  res.json({ ok: true });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

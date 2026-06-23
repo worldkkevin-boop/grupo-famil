@@ -12,7 +12,11 @@ const mesLabel = mes => {
 };
 
 // ── Estado ────────────────────────────────────────────────────────────────────
-let state = { membros: [], mes: '', total: 0, selectedMembro: null };
+let state = { membros: [], mes: '', total: 0, selectedMembro: null, isAdmin: false };
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('adminToken');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -56,10 +60,11 @@ $('install-dismiss')?.addEventListener('click', () => {
 // ── Carregar status ───────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
-    const data = await fetch('/api/status').then(r => r.json());
+    const data = await fetch('/api/status', { headers: getAuthHeaders() }).then(r => r.json());
     state.membros = data.membros;
     state.mes     = data.mes;
     state.total   = data.total_centavos;
+    state.isAdmin = data.isAdmin || false;
     render(data);
   } catch (err) {
     console.error('Erro ao carregar status:', err);
@@ -126,6 +131,11 @@ function buildCard(m) {
          Desfazer pagamento
        </button>`;
 
+  const adminBtn = state.isAdmin ? `
+    <button class="btn-remove" data-action="remover" data-membro-id="${m.id}" aria-label="Remover ${m.nome}">
+      ❌ Remover
+    </button>` : '';
+
   return `
     <div class="${classes}" id="card-${m.id}">
       <div class="card-top">
@@ -136,7 +146,7 @@ function buildCard(m) {
         </div>
       </div>
       <div class="member-cota" aria-label="Cota de ${m.nome}: ${fmt(m.cota)}">${fmt(m.cota)}</div>
-      ${actionBtn}
+      <div style="display:flex;gap:8px;">${actionBtn}${adminBtn}</div>
     </div>`;
 }
 
@@ -145,6 +155,7 @@ $('members-grid').addEventListener('click', e => {
   const pix     = e.target.closest('[data-action="pix"]');
   const unpay   = e.target.closest('[data-action="despagar"]');
   const convite = e.target.closest('[data-action="convidar"]');
+  const remover = e.target.closest('[data-action="remover"]');
 
   if (pix) {
     const m = state.membros.find(m => m.id === parseInt(pix.dataset.membroId, 10));
@@ -152,6 +163,7 @@ $('members-grid').addEventListener('click', e => {
   }
   if (unpay)   despagar(parseInt(unpay.dataset.membroId, 10));
   if (convite) gerarConvite(parseInt(convite.dataset.membroId, 10));
+  if (remover) removerMembro(parseInt(remover.dataset.membroId, 10));
 });
 
 // ── Modal Pix ─────────────────────────────────────────────────────────────────
@@ -243,11 +255,48 @@ async function despagar(membro_id) {
   const m = state.membros.find(m => m.id === membro_id);
   if (!confirm(`Desfazer pagamento de ${m?.nome ?? 'membro'}?`)) return;
   await fetch('/api/despagar', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ membro_id }),
   });
   await loadStatus();
 }
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+async function removerMembro(membro_id) {
+  const m = state.membros.find(m => m.id === membro_id);
+  if (!confirm(`Deseja realmente remover ${m?.nome ?? 'este membro'} da família? O slot ficará vazio.`)) return;
+  try {
+    const res = await fetch('/api/admin/remover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ membro_id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro);
+    await loadStatus();
+  } catch (err) {
+    alert(err.message || 'Erro ao remover membro');
+  }
+}
+
+window.handleGoogleAdminLogin = async function(response) {
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ google_id_token: response.credential })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro);
+    localStorage.setItem('adminToken', data.token);
+    closeModal('admin-overlay');
+    await loadStatus();
+    alert('Admin logado com sucesso!');
+  } catch (err) {
+    alert(err.message || 'Erro no login admin');
+  }
+};
+
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────
 function openModal(id) {
@@ -262,11 +311,13 @@ function closeModal(id) {
 
 $('modal-close').addEventListener('click', () => closeModal('modal-overlay'));
 $('invite-close').addEventListener('click', () => closeModal('invite-overlay'));
+$('admin-close')?.addEventListener('click', () => closeModal('admin-overlay'));
 $('btn-mark-paid').addEventListener('click', markPaid);
 
-['modal-overlay', 'invite-overlay'].forEach(id =>
-  $(id).addEventListener('click', e => { if (e.target === $(id)) closeModal(id); })
-);
+['modal-overlay', 'invite-overlay', 'admin-overlay'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('click', e => { if (e.target === el) closeModal(id); });
+});
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;

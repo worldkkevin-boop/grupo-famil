@@ -688,3 +688,47 @@ body {
   transition: color 0.15s;
 }
 .install-dismiss:hover { color: var(--text); }
+
+/* ── Admin ──────────────────────────────────────────────────────────────────── */
+.btn-admin-icon {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-admin-icon:hover {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.btn-remove {
+  flex: 1;
+  padding: 10px;
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--danger);
+  border: 1px dashed rgba(248, 113, 113, 0.4);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: var(--danger);
+}
