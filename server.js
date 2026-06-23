@@ -57,9 +57,10 @@ db.exec(`
     FOREIGN KEY(grupo_id) REFERENCES grupos(id)
   );
   CREATE TABLE IF NOT EXISTS config (
-    chave          TEXT PRIMARY KEY,
+    chave          TEXT,
     valor          TEXT NOT NULL,
-    grupo_id       INTEGER DEFAULT 1
+    grupo_id       INTEGER DEFAULT 1,
+    PRIMARY KEY (chave, grupo_id)
   );
 `);
 
@@ -75,6 +76,23 @@ for (const col of [
   'ALTER TABLE assinaturas ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE config ADD COLUMN grupo_id INTEGER DEFAULT 1',
 ]) { try { db.exec(col); } catch {} }
+
+// Fix do Schema do Config (Migrations)
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(config)").all();
+  const pkColumns = tableInfo.filter(c => c.pk > 0);
+  if (pkColumns.length === 1 && pkColumns[0].name === 'chave') {
+    db.exec(`
+      CREATE TABLE config_new (chave TEXT, valor TEXT NOT NULL, grupo_id INTEGER DEFAULT 1, PRIMARY KEY (chave, grupo_id));
+      INSERT INTO config_new SELECT * FROM config;
+      DROP TABLE config;
+      ALTER TABLE config_new RENAME TO config;
+    `);
+    console.log('✅  Tabela config migrada para Primary Key composta.');
+  }
+} catch (err) {
+  console.error("Erro ao migrar config:", err);
+}
 
 // Seed inicial: Grupo 1 (O grupo legadado do Admin principal)
 const { cntGrupos } = db.prepare('SELECT COUNT(*) as cnt FROM grupos').get();
@@ -527,32 +545,35 @@ app.post('/api/admin/config', (req, res) => {
 
 // ── API: SaaS Onboarding (Simulação de Checkout) ──────────────────────────────
 app.post('/api/checkout', (req, res) => {
-  // Em produção, isso seria um Webhook do Stripe/MercadoPago após o pagamento.
-  // Aqui estamos simulando que o usuário pagou e está criando o grupo.
-  const { nome_grupo, dono_email, pix_key, pix_name, pix_city } = req.body;
-  
-  if (!nome_grupo || !dono_email || !pix_key || !pix_name || !pix_city) {
-    return res.status(400).json({ erro: 'Preencha todos os campos do seu grupo e dados Pix' });
+  try {
+    const { nome_grupo, dono_email, pix_key, pix_name, pix_city } = req.body;
+    
+    if (!nome_grupo || !dono_email || !pix_key || !pix_name || !pix_city) {
+      return res.status(400).json({ erro: 'Preencha todos os campos do seu grupo e dados Pix' });
+    }
+
+    // Verifica se o e-mail já é dono de algum grupo
+    const existe = db.prepare('SELECT id FROM grupos WHERE dono_email=?').get(dono_email);
+    if (existe) return res.status(400).json({ erro: 'Este e-mail já possui um grupo' });
+
+    // Cria o grupo
+    const ins = db.prepare('INSERT INTO grupos (nome, dono_email, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?)');
+    const info = ins.run(nome_grupo, dono_email, pix_key, pix_name, pix_city, new Date().toISOString());
+    const grupoId = info.lastInsertRowid;
+
+    // Insere configurações padrão
+    db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run('dia_vencimento', '10', grupoId);
+    db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run('modo_pagamento', 'rateio', grupoId);
+
+    // Insere alguns slots vazios de membros para o grupo
+    const insMembro = db.prepare('INSERT INTO membros (nome, ativo, grupo_id) VALUES (?, 0, ?)');
+    ['Membro 1', 'Membro 2', 'Membro 3', 'Membro 4', 'Membro 5'].forEach(n => insMembro.run(n, grupoId));
+
+    res.json({ ok: true, grupo_id: grupoId });
+  } catch (err) {
+    console.error("Erro no checkout:", err);
+    res.status(500).json({ erro: 'Ocorreu um erro interno: ' + err.message });
   }
-
-  // Verifica se o e-mail já é dono de algum grupo
-  const existe = db.prepare('SELECT id FROM grupos WHERE dono_email=?').get(dono_email);
-  if (existe) return res.status(400).json({ erro: 'Este e-mail já possui um grupo' });
-
-  // Cria o grupo
-  const ins = db.prepare('INSERT INTO grupos (nome, dono_email, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?)');
-  const info = ins.run(nome_grupo, dono_email, pix_key, pix_name, pix_city, new Date().toISOString());
-  const grupoId = info.lastInsertRowid;
-
-  // Insere configurações padrão
-  db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run('dia_vencimento', '10', grupoId);
-  db.prepare('INSERT INTO config (chave, valor, grupo_id) VALUES (?, ?, ?)').run('modo_pagamento', 'rateio', grupoId);
-
-  // Insere alguns slots vazios de membros para o grupo
-  const insMembro = db.prepare('INSERT INTO membros (nome, ativo, grupo_id) VALUES (?, 0, ?)');
-  ['Membro 1', 'Membro 2', 'Membro 3', 'Membro 4', 'Membro 5'].forEach(n => insMembro.run(n, grupoId));
-
-  res.json({ ok: true, grupo_id: grupoId });
 });
 
 // ── Rotas do Front-End ────────────────────────────────────────────────────────
