@@ -37,15 +37,24 @@
       <h2 style="margin-bottom: 8px;">Bem-vindo ao Grupo</h2>
       <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px;">Faça login para gerenciar sua assinatura e acessar o painel.</p>
 
-      <div style="display:flex; gap:16px; align-items:center;">
+      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom: 24px;">
+        <input type="email" id="login-email" placeholder="E-mail" style="padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:#fff; width:100%;">
+        <input type="password" id="login-senha" placeholder="Senha" style="padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:#fff; width:100%;">
+        <button onclick="fazerLoginEmail()" class="btn-main" style="width:100%; padding:12px; border-radius:8px;">Entrar</button>
+      </div>
+
+      <div style="text-align:center; margin-bottom:24px; color:var(--text-soft); font-size:0.9rem;">
+        <span>ou</span>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:16px; align-items:center;">
+        <div id="google-btn"></div>
         <button id="btn-superadmin" class="btn-main" style="display:none; padding:8px 16px; font-size:0.85rem; border-radius:12px; background:linear-gradient(135deg, #ec4899, #8b5cf6);" onclick="abrirSuperAdmin()">
           👑 Painel SaaS
         </button>
-        <div id="google-btn"></div>
-        <button id="btn-sair" class="btn-secondary" style="display:none" onclick="logout()">Sair</button>
       </div>
 
-      <div id="login-error" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-top: 16px; background: rgba(248,113,113,0.1); padding: 10px; border-radius: var(--radius-sm);"></div>
+      <div id="login-error" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-top: 16px; background: rgba(248,113,113,0.1); padding: 10px; border-radius: var(--radius-sm); text-align:center;"></div>
     </div>
   </div>
 

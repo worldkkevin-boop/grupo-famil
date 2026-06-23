@@ -114,6 +114,39 @@ window.handleUniversalLogin = async (response) => {
   }
 };
 
+async function fazerLoginEmail() {
+  const email = $('login-email').value.trim();
+  const senha = $('login-senha').value.trim();
+  if (!email || !senha) return;
+
+  const btn = event.target;
+  const oldText = btn.textContent;
+  btn.textContent = 'Carregando...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/login/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Falha no login');
+
+    localStorage.setItem('userToken', data.token);
+    localStorage.setItem('userRole', data.role);
+    localStorage.setItem('isSuperadmin', data.is_superadmin ? 'true' : 'false');
+    $('login-error').classList.add('hidden');
+    loadStatus();
+  } catch (err) {
+    $('login-error').textContent = err.message;
+    $('login-error').classList.remove('hidden');
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+}
+
 $('btn-logout')?.addEventListener('click', () => {
   localStorage.removeItem('userToken');
   localStorage.removeItem('userRole');

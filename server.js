@@ -17,6 +17,23 @@ const PIX_KEY  = process.env.PIX_KEY  || '01749132222';
 const PIX_NAME = process.env.PIX_NAME || 'KEVIN SCHWNAKE';
 const PIX_CITY = process.env.PIX_CITY || 'LARANJAL DO JARI';
 
+// ── Utilitários / Google / Auth ───────────────────────────────────────────────
+const hashPassword = (password) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+};
+
+const verifyPassword = (password, storedHash) => {
+  if (!storedHash) return false;
+  try {
+    const [salt, key] = storedHash.split(':');
+    const hashedBuffer = crypto.scryptSync(password, salt, 64);
+    const keyBuffer = Buffer.from(key, 'hex');
+    return crypto.timingSafeEqual(hashedBuffer, keyBuffer);
+  } catch { return false; }
+};
+
 // ── Banco de Dados e Migrations ───────────────────────────────────────────────
 const db = new DatabaseSync(path.join(__dirname, 'grupo-famil.db'));
 
@@ -24,7 +41,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS grupos (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     nome           TEXT NOT NULL,
-    dono_email     TEXT NOT NULL,
+    dono_email     TEXT UNIQUE NOT NULL,
+    senha_hash     TEXT,
     pix_key        TEXT,
     pix_name       TEXT,
     pix_city       TEXT,
@@ -75,6 +93,8 @@ for (const col of [
   'ALTER TABLE pagamentos ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE assinaturas ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE config ADD COLUMN grupo_id INTEGER DEFAULT 1',
+  'ALTER TABLE grupos ADD COLUMN senha_hash TEXT',
+  'ALTER TABLE membros ADD COLUMN senha_hash TEXT',
 ]) { try { db.exec(col); } catch {} }
 
 // Fix do Schema do Config (Migrations)
@@ -239,6 +259,47 @@ app.get('/convite/:token', (_req, res) =>
 // ── API: Config pública (client_id não é segredo) ─────────────────────────────
 app.get('/api/config', (_req, res) => {
   res.json({ google_client_id: GOOGLE_CLIENT_ID });
+});
+
+// ── API: Auth (Email e Senha) ────────────────────────────────────────────────
+app.post('/api/login/email', (req, res) => {
+  const { email, senha } = req.body;
+  if (!email || !senha) return res.status(400).json({ erro: 'Preencha email e senha' });
+
+  const emailLower = email.toLowerCase().trim();
+  let role = null;
+  let membroId = null;
+  let grupoId = null;
+  let nome = '';
+
+  // Verifica Administrador (Grupos)
+  const dono = db.prepare('SELECT id, nome, senha_hash FROM grupos WHERE dono_email=? AND ativo=1').get(emailLower);
+  if (dono && verifyPassword(senha, dono.senha_hash)) {
+    role = 'admin';
+    grupoId = dono.id;
+    nome = dono.nome;
+  }
+
+  // Verifica Membro (Membros)
+  if (!role) {
+    const membro = db.prepare('SELECT id, grupo_id, nome, senha_hash FROM membros WHERE email=? AND ativo=1').get(emailLower);
+    if (membro && verifyPassword(senha, membro.senha_hash)) {
+      role = 'member';
+      membroId = membro.id;
+      grupoId = membro.grupo_id;
+      nome = membro.nome;
+    }
+  }
+
+  if (!role) {
+    return res.status(403).json({ erro: 'E-mail ou senha incorretos, ou conta inexistente.' });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const isSuperadmin = (emailLower === 'worldkkevin@gmail.com');
+  
+  sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome, is_superadmin: isSuperadmin });
+  res.json({ token, role, nome, is_superadmin: isSuperadmin });
 });
 
 // ── API: Status ───────────────────────────────────────────────────────────────
@@ -472,14 +533,21 @@ app.post('/api/convite/aceitar', async (req, res) => {
     } catch (e) {
       return res.status(401).json({ erro: `Autenticação Google falhou: ${e.message}` });
     }
-  } else if (nomeManual?.trim() && emailManual?.trim()) {
-    // Fallback manual (sem Client ID configurado)
+  } else if (nomeManual?.trim() && emailManual?.trim() && req.body.senha) {
+    // Fallback manual (Email + Senha)
     nome  = nomeManual.trim();
     email = emailManual.trim().toLowerCase();
+    const senhaHash = hashPassword(req.body.senha);
+    
+    db.prepare('UPDATE membros SET nome=?, email=?, senha_hash=?, ativo=1, convite_usado=1 WHERE id=?')
+      .run(nome, email, senhaHash, membro.id);
+
+    return res.json({ ok: true, nome, membro_id: membro.id });
   } else {
-    return res.status(400).json({ erro: 'Autenticação necessária' });
+    return res.status(400).json({ erro: 'Autenticação com Google ou Email/Senha necessária' });
   }
 
+  // Google OAuth salva aqui:
   db.prepare('UPDATE membros SET nome=?, email=?, foto_url=?, google_sub=?, ativo=1, convite_usado=1 WHERE id=?')
     .run(nome, email, foto_url, google_sub, membro.id);
 
@@ -580,19 +648,23 @@ app.post('/api/admin/config', (req, res) => {
 // ── API: SaaS Onboarding (Simulação de Checkout) ──────────────────────────────
 app.post('/api/checkout', (req, res) => {
   try {
-    const { nome_grupo, dono_email, pix_key, pix_name, pix_city } = req.body;
+    const { nome_grupo, dono_email, senha, pix_key, pix_name, pix_city } = req.body;
     
-    if (!nome_grupo || !dono_email || !pix_key || !pix_name || !pix_city) {
-      return res.status(400).json({ erro: 'Preencha todos os campos do seu grupo e dados Pix' });
+    if (!nome_grupo || !dono_email || !senha || !pix_key || !pix_name || !pix_city) {
+      return res.status(400).json({ erro: 'Preencha todos os campos, incluindo a senha.' });
     }
 
+    const emailLower = dono_email.toLowerCase().trim();
+
     // Verifica se o e-mail já é dono de algum grupo
-    const existe = db.prepare('SELECT id FROM grupos WHERE dono_email=?').get(dono_email);
+    const existe = db.prepare('SELECT id FROM grupos WHERE dono_email=?').get(emailLower);
     if (existe) return res.status(400).json({ erro: 'Este e-mail já possui um grupo' });
 
+    const senha_hash = hashPassword(senha);
+
     // Cria o grupo
-    const ins = db.prepare('INSERT INTO grupos (nome, dono_email, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?)');
-    const info = ins.run(nome_grupo, dono_email, pix_key, pix_name, pix_city, new Date().toISOString());
+    const ins = db.prepare('INSERT INTO grupos (nome, dono_email, senha_hash, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const info = ins.run(nome_grupo, emailLower, senha_hash, pix_key, pix_name, pix_city, new Date().toISOString());
     const grupoId = info.lastInsertRowid;
 
     // Insere configurações padrão

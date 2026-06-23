@@ -89,6 +89,7 @@ function setupManualForm() {
     e.preventDefault();
     const nome  = $('input-nome').value.trim();
     const email = $('input-email').value.trim();
+    const senha = $('input-senha').value.trim();
     const err   = $('form-error');
 
     err.classList.add('hidden');
@@ -96,15 +97,19 @@ function setupManualForm() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       err.textContent = 'Informe um e-mail válido.'; err.classList.remove('hidden'); return;
     }
+    if (senha.length < 6) {
+      err.textContent = 'A senha deve ter no mínimo 6 caracteres.'; err.classList.remove('hidden'); return;
+    }
 
     $('btn-submit').disabled    = true;
-    $('btn-submit').textContent = 'Entrando...';
+    $('btn-submit').textContent = 'Confirmando...';
     showState('state-processing');
 
     try {
-      const res  = await fetch('/api/convite/aceitar', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, nome, email }),
+      const res = await fetch('/api/convite/aceitar', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ token, nome, email, senha }),
       });
       const data = await res.json();
 

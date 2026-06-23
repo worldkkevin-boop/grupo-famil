@@ -169,8 +169,12 @@
 
       <div id="form-content">
         <div class="input-group">
-          <label>Seu E-mail Google (Será o Administrador)</label>
+          <label>Seu E-mail (Será o Administrador)</label>
           <input type="email" id="onb-email" placeholder="seuemail@gmail.com">
+        </div>
+        <div class="input-group">
+          <label>Crie uma Senha Segura</label>
+          <input type="password" id="onb-senha" placeholder="Mínimo de 6 caracteres">
         </div>
         <div class="input-group">
           <label>Nome do Grupo</label>
@@ -213,13 +217,14 @@
 
       const payload = {
         dono_email: document.getElementById('onb-email').value.trim().toLowerCase(),
+        senha: document.getElementById('onb-senha').value.trim(),
         nome_grupo: document.getElementById('onb-grupo').value.trim(),
         pix_key: document.getElementById('onb-pixkey').value.trim(),
         pix_name: document.getElementById('onb-pixname').value.trim(),
         pix_city: document.getElementById('onb-pixcity').value.trim()
       };
 
-      if (!payload.dono_email || !payload.nome_grupo || !payload.pix_key || !payload.pix_name || !payload.pix_city) {
+      if (!payload.dono_email || !payload.senha || !payload.nome_grupo || !payload.pix_key || !payload.pix_name || !payload.pix_city) {
         msgErro.textContent = "Por favor, preencha todos os campos.";
         msgErro.style.display = 'block';
         return;
