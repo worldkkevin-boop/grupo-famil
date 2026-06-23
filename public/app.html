@@ -59,6 +59,16 @@
     </div>
   </div>
 
+  <!-- SaaS Blocked Screen -->
+  <div id="saas-blocked-view" class="hidden login-view">
+    <div class="login-card" style="text-align:center;">
+      <div style="font-size: 3rem; margin-bottom: 16px;">💳</div>
+      <h2 style="margin-bottom: 8px;">Assinatura Pendente</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px;">O acesso ao painel está temporariamente bloqueado. Verifique com o administrador se a mensalidade do sistema foi paga.</p>
+      <button onclick="location.reload()" class="btn-main" style="width:100%; padding:12px; border-radius:8px;">Verificar novamente</button>
+    </div>
+  </div>
+
   <!-- Dashboard View (Oculto por padrão) -->
   <div id="dashboard-view" class="hidden">
     <!-- Header -->
@@ -257,6 +267,6 @@
   </div>
 
 
-  <script src="app.js?v=6.7"></script>
+  <script src="app.js?v=6.8"></script>
 </body>
 </html>

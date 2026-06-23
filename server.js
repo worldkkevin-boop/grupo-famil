@@ -315,6 +315,18 @@ app.get('/api/status', (req, res) => {
   const isAdmin = session.role === 'admin';
   const grupo_id = session.grupo_id;
   const mes = mesAtual();
+  const grupo = db.prepare('SELECT saas_pago_ate, data_criacao FROM grupos WHERE id=?').get(grupo_id);
+  
+  let saas_bloqueado = false;
+  const agora = new Date();
+  if (grupo.saas_pago_ate) {
+    if (new Date(grupo.saas_pago_ate) < agora) saas_bloqueado = true;
+  } else {
+    // Valida trial de 7 dias
+    const diffDias = (agora - new Date(grupo.data_criacao)) / (1000 * 60 * 60 * 24);
+    if (diffDias > 7) saas_bloqueado = true;
+  }
+
   const membros = db.prepare('SELECT id, nome, email, foto_url, ativo FROM membros WHERE grupo_id=?').all(grupo_id);
   const comCotas = calcularCotas(membros, grupo_id);
 
@@ -334,6 +346,7 @@ app.get('/api/status', (req, res) => {
 
   res.json({
     loggedIn: true,
+    saas_bloqueado,
     mes,
     total_centavos: total,
     assinaturas,

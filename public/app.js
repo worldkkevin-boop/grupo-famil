@@ -168,7 +168,15 @@ async function loadStatus() {
       return;
     }
     
+    if (data.saas_bloqueado) {
+      $('login-view').classList.add('hidden');
+      $('dashboard-view').classList.add('hidden');
+      $('saas-blocked-view').classList.remove('hidden');
+      return;
+    }
+    
     $('login-view').classList.add('hidden');
+    $('saas-blocked-view').classList.add('hidden');
     $('dashboard-view').classList.remove('hidden');
 
 
@@ -439,6 +447,15 @@ async function copyText(inputId, btnId) {
 
 $('btn-copy').addEventListener('click', () => copyText('pix-code', 'btn-copy'));
 $('btn-copy-invite').addEventListener('click', () => copyText('invite-link-input', 'btn-copy-invite'));
+$('btn-copy-saas-pix')?.addEventListener('click', () => {
+  const t = document.querySelector('#saas-blocked-view textarea');
+  if (t) {
+    navigator.clipboard.writeText(t.value);
+    const b = $('btn-copy-saas-pix');
+    b.textContent = '✓ Copiado!';
+    setTimeout(() => b.textContent = 'Copiar Chave Pix', 2000);
+  }
+});
 
 // ── Marcar pago ───────────────────────────────────────────────────────────────
 async function markPaid() {
