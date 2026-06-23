@@ -603,11 +603,15 @@ document.querySelectorAll('.btn-renovar-plano').forEach(btn => {
 // ── Marcar pago ───────────────────────────────────────────────────────────────
 async function markPaid() {
   if (!state.selectedMembro) return;
+  await setPago(state.selectedMembro.id);
+  closeModal('modal-overlay');
+}
+
+async function setPago(membro_id) {
   await fetch('/api/pagar', {
     method: 'POST', headers: getAuthHeaders(),
-    body: JSON.stringify({ membro_id: state.selectedMembro.id })
+    body: JSON.stringify({ membro_id })
   });
-  closeModal('modal-overlay');
   await loadStatus();
 }
 
