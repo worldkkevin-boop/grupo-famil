@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -37,22 +37,7 @@
       <h2 style="margin-bottom: 8px;">Bem-vindo ao Grupo</h2>
       <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px;">Faça login para gerenciar sua assinatura e acessar o painel.</p>
 
-      <div id="g_id_onload"
-           data-client_id="845258838384-s6f1s7m9q0vsc167q80r4c44243j6tih.apps.googleusercontent.com"
-           data-context="signin"
-           data-ux_mode="popup"
-           data-callback="handleUniversalLogin"
-           data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin"
-           data-type="standard"
-           data-shape="rectangular"
-           data-theme="outline"
-           data-text="signin_with"
-           data-size="large"
-           data-logo_alignment="left"
-           style="display: flex; justify-content: center;">
-      </div>
+      <div id="universal-gsi-btn" style="display:flex; justify-content:center;"></div>
 
       <div id="login-error" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-top: 16px; background: rgba(248,113,113,0.1); padding: 10px; border-radius: var(--radius-sm);"></div>
     </div>
@@ -252,6 +237,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

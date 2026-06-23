@@ -72,6 +72,25 @@ window.addEventListener('DOMContentLoaded', checkStandalone);
 window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
 
 // ── Universal Login ───────────────────────────────────────────────────────────
+let gsiInitialized = false;
+async function initGoogleSignIn() {
+  if (gsiInitialized) return;
+  try {
+    const res = await fetch('/api/config');
+    const { google_client_id } = await res.json();
+    if (google_client_id && window.google) {
+      google.accounts.id.initialize({
+        client_id: google_client_id,
+        callback: window.handleUniversalLogin,
+      });
+      google.accounts.id.renderButton($('universal-gsi-btn'), {
+        theme: 'filled_dark', size: 'large', shape: 'pill'
+      });
+      gsiInitialized = true;
+    }
+  } catch (err) { console.error('Erro GSI:', err); }
+}
+
 window.handleUniversalLogin = async (response) => {
   try {
     const res = await fetch('/api/login', {
@@ -107,6 +126,7 @@ async function loadStatus() {
       localStorage.removeItem('userRole');
       $('login-view').classList.remove('hidden');
       $('dashboard-view').classList.add('hidden');
+      initGoogleSignIn();
       return;
     }
     const data = await res.json();
