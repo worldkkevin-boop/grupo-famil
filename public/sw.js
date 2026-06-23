@@ -1,5 +1,5 @@
 /* ── Service Worker — Grupo FAMIl ─────────────────────────────────────────── */
-const CACHE = 'famil-v3.3';
+const CACHE = 'famil-v3.4';
 const SHELL = ['/', '/style.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -22,9 +22,9 @@ self.addEventListener('fetch', e => {
     e.respondWith(fetch(e.request));
     return;
   }
-  // App shell: cache-first
+  // App shell: cache-first com ignoreSearch para query params (cache busting)
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    caches.match(e.request, { ignoreSearch: true }).then(cached => cached || fetch(e.request))
   );
 });
 
