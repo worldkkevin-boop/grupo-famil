@@ -255,6 +255,9 @@ app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 app.get('/convite/:token', (_req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'convite.html'))
 );
+app.get('/superadmin', (_req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'superadmin.html'))
+);
 
 // ── API: Config pública (client_id não é segredo) ─────────────────────────────
 app.get('/api/config', (_req, res) => {

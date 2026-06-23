@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Super Admin - FAMIl</title>
+  <style>
+    :root {
+      --bg: #0f111a;
+      --surface: #1a1d2d;
+      --border: #2a2d3d;
+      --primary: #8b5cf6;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --danger: #f43f5e;
+      --success: #10b981;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Container de Login */
+    #login-view {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      padding: 20px;
+    }
+
+    .login-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 40px;
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+
+    .btn-main {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), #ec4899);
+      color: #fff;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-main:hover { opacity: 0.9; }
+
+    .input-field {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+    }
+    .input-field:focus { border-color: var(--primary); }
+
+    /* Container do Painel */
+    #dashboard-view {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .content {
+      padding: 24px;
+      flex: 1;
+      overflow-y: auto;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Tabela */
+    .table-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .btn-delete {
+      background: rgba(244, 63, 94, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-delete:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- View de Login -->
+  <div id="login-view">
+    <div class="login-box">
+      <div style="font-size: 3rem; margin-bottom: 10px;">👑</div>
+      <h2 style="margin-bottom: 8px;">Painel SaaS</h2>
+      <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 0.9rem;">
+        Acesso restrito à administração do sistema.
+      </p>
+
+      <div id="error-msg" class="hidden" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 16px; background: rgba(244,63,94,0.1); padding: 10px; border-radius: 8px;"></div>
+      
+      <!-- O botão do Google nativo -->
+      <div style="display:flex; justify-content:center; margin-bottom: 16px;">
+        <div id="google-btn"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- View do Dashboard -->
+  <div id="dashboard-view">
+    <header class="header">
+      <div class="header-title">
+        👑 FAMIl SaaS Admin
+      </div>
+      <button class="btn-logout" onclick="logout()">Sair</button>
+    </header>
+
+    <main class="content">
+      <h2 style="margin-bottom: 8px;">Clientes (Grupos Cadastrados)</h2>
+      <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom: 24px;">Gerencie as instâncias do sistema FAMIl ativas na sua plataforma.</p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome do Grupo</th>
+              <th>Dono (E-mail)</th>
+              <th>Membros</th>
+              <th>Dados Pix</th>
+              <th>Criado em</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Renderizado via JS -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="/superadmin.js?v=1.0"></script>
+</body>
+</html>
