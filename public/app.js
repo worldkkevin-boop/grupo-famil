@@ -153,6 +153,30 @@ $('btn-logout')?.addEventListener('click', () => {
   loadStatus();
 });
 
+$('btn-force-update')?.addEventListener('click', async () => {
+  const btn = $('btn-force-update');
+  btn.textContent = '⏳...';
+  
+  // Limpa todos os caches do Service Worker
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch (e) {}
+  }
+  
+  // Desregistra os Service Workers
+  if ('serviceWorker' in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    } catch (e) {}
+  }
+  
+  // Recarrega a página forçando o servidor
+  window.location.reload(true);
+});
+
 // ── Carregar status ───────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
