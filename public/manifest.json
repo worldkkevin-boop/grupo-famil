@@ -2,7 +2,7 @@
   "name": "Grupo FAMIl — Assinaturas",
   "short_name": "FAMIl",
   "description": "Gerencie as assinaturas compartilhadas do Grupo FAMIl",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#06060f",

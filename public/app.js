@@ -239,6 +239,19 @@ function render(data) {
 
   if (state.isAdmin) {
     $('btn-admin-panel').classList.remove('hidden');
+    $('btn-copy-pix').classList.remove('hidden');
+    
+    // Adiciona funcionalidade de copiar a chave PIX
+    $('btn-copy-pix').onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(data.pix_key);
+        const originalText = $('btn-copy-pix').innerHTML;
+        $('btn-copy-pix').innerHTML = '✅ Copiado!';
+        setTimeout(() => $('btn-copy-pix').innerHTML = originalText, 2000);
+      } catch (err) {
+        alert('Chave Pix: ' + data.pix_key);
+      }
+    };
 
     // Popular configs
     $('config-dia-vencimento').value = data.dia_vencimento || 10;

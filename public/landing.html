@@ -208,6 +208,10 @@
   </div>
 
   <script>
+    if (localStorage.getItem('userToken')) {
+      window.location.replace('/app');
+    }
+
     async function criarGrupo() {
       const msgErro = document.getElementById('msg-erro');
       const msgSucesso = document.getElementById('msg-sucesso');

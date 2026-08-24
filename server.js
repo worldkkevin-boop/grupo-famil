@@ -365,7 +365,8 @@ app.get('/api/status', (req, res) => {
     vapid_public: getConfig('vapid_public', '', 1), // Vapid é global (grupo 1)
     membros: comCotas,
     isAdmin,
-    me_id: session.membro_id
+    me_id: session.membro_id,
+    pix_key: isAdmin ? grupo.pix_key : undefined
   });
 });
 
