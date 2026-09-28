@@ -895,17 +895,94 @@ app.post('/api/admin/cobrar-automatico', async (req, res) => {
   const grupo = db.prepare('SELECT pix_key, pix_name, pix_city FROM grupos WHERE id=?').get(session.grupo_id);
   const payloadPix = gerarPix(valorCentavos, grupo || {});
   const valorStr = (valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const mes = mesAtual();
+  const chavePix = (grupo?.pix_key || PIX_KEY || '').trim();
 
-  const msg = `Olá, ${membro.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (${mes}) está disponível no valor de *${valorStr}*.\n\n🔑 *Chave Pix:*\n${grupo.pix_key || PIX_KEY}\n\n⚡ *Pix Copia e Cola:*\n\`\`\`${payloadPix}\`\`\`\n\nAssim que efetuar o pagamento, me confirma por aqui! Obrigado! 🙌`;
+  // Mensagens em sequência isolada para permitir cópia em 1 toque no celular
+  const mensagens = [
+    `Olá, ${membro.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (*${mes}*) está disponível no valor de *${valorStr}*.\n\n⚡ Abaixo segue o código *Pix Copia e Cola* para pagamento no aplicativo do seu banco:`,
+    payloadPix // Mensagem isolada com APENAS o código Pix Copia e Cola
+  ];
+
+  if (chavePix) {
+    mensagens.push(`🔑 Se preferir pagar direto pela *Chave Pix*:`);
+    mensagens.push(chavePix); // Mensagem isolada com APENAS a chave Pix pura
+  }
+
+  mensagens.push(`Assim que efetuar o pagamento, basta enviar o comprovante (foto, PDF ou mensagem) aqui mesmo nessa conversa que o nosso sistema dá baixa e confirma o seu pagamento na hora! 🙌`);
 
   try {
-    const envio = await whatsapp.sendWhatsAppMessage(membro.telefone, msg);
-    console.log(`[Cobrança Auto] ✅ Disparado com sucesso para ${membro.nome} (${membro.telefone}) -> JID: ${envio.jid}`);
+    const envio = await whatsapp.sendWhatsAppMessages(membro.telefone, mensagens);
+    console.log(`[Cobrança Auto] ✅ Disparadas ${mensagens.length} mensagens para ${membro.nome} (${membro.telefone}) -> JID: ${envio.jid}`);
     res.json({ ok: true, enviado: true, membro: membro.nome, telefone: membro.telefone, jid: envio.jid });
   } catch (err) {
     console.error(`[Cobrança Auto] ❌ Falha ao disparar para ${membro.nome} (${membro.telefone}):`, err);
     res.status(500).json({ erro: 'Falha no envio automático: ' + err.message });
+  }
+});
+
+// ── WhatsApp Bot: Auto Detecção de Comprovante de Pagamento ───────────────────
+whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
+  try {
+    const digits = remoteJid.replace(/\D/g, '');
+    const ultimos8 = digits.slice(-8);
+
+    // Busca se pertence a algum membro ativo cadastrado
+    const membros = db.prepare('SELECT id, nome, grupo_id, telefone FROM membros WHERE ativo=1 AND telefone IS NOT NULL').all();
+    const membro = membros.find(m => String(m.telefone).replace(/\D/g, '').endsWith(ultimos8));
+
+    if (!membro) {
+      console.log(`[WhatsApp Bot] Mensagem recebida de remetente não cadastrado como membro: ${digits}`);
+      return;
+    }
+
+    const isImage = Boolean(msg.message?.imageMessage);
+    const isDoc   = Boolean(msg.message?.documentMessage);
+    const texto   = (
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      msg.message?.imageMessage?.caption ||
+      msg.message?.documentMessage?.caption || ''
+    ).toLowerCase();
+
+    const isComprovante = isImage || isDoc || /pago|paguei|comprovante|pix feito|mandei|transferi|enviei|ta pago|tá pago|concluido|concluído/.test(texto);
+
+    if (isComprovante) {
+      console.log(`📥 [WhatsApp Bot] Comprovante detectado para o membro: ${membro.nome} (${membro.telefone})`);
+
+      const mes = mesAtual();
+      const row = db.prepare('SELECT id, pago FROM pagamentos WHERE membro_id=? AND mes_referencia=? AND grupo_id=?').get(membro.id, mes, membro.grupo_id);
+      if (row) {
+        db.prepare('UPDATE pagamentos SET pago=1, data_pagamento=? WHERE id=?').run(new Date().toISOString(), row.id);
+      } else {
+        db.prepare('INSERT INTO pagamentos (membro_id, mes_referencia, pago, grupo_id, data_pagamento) VALUES (?, ?, 1, ?, ?)')
+          .run(membro.id, mes, membro.grupo_id, new Date().toISOString());
+      }
+
+      console.log(`✅ [WhatsApp Bot] Pagamento do mês ${mes} baixado para ${membro.nome}!`);
+
+      // Envia confirmação automática para o membro
+      const confirmacao = [
+        `✅ *Comprovante recebido com sucesso, ${membro.nome}!* 🙌`,
+        `Identifiquei o seu pagamento e a sua assinatura do mês (*${mes}*) já está marcada como *PAGA* no nosso painel.\n\nMuito obrigado! 🚀`
+      ];
+      await whatsapp.sendWhatsAppMessages(membro.telefone, confirmacao);
+
+      // Notifica o administrador do grupo
+      try {
+        const dono = db.prepare('SELECT dono_email FROM grupos WHERE id=?').get(membro.grupo_id);
+        const adminMembro = db.prepare('SELECT telefone FROM membros WHERE grupo_id=? AND email=?').get(membro.grupo_id, dono?.dono_email);
+        if (adminMembro && adminMembro.telefone && !String(adminMembro.telefone).endsWith(ultimos8)) {
+          await whatsapp.sendWhatsAppMessage(
+            adminMembro.telefone,
+            `🔔 *Robô FAMIl - Pagamento Confirmado!*\nO membro *${membro.nome}* acabou de enviar o comprovante no WhatsApp.\nO mês *${mes}* já foi baixado como *PAGO* automaticamente no painel!`
+          );
+        }
+      } catch (errNotif) {
+        console.warn('[WhatsApp Bot] Falha ao notificar admin:', errNotif.message);
+      }
+    }
+  } catch (err) {
+    console.error('[WhatsApp Bot] Erro ao processar mensagem recebida:', err);
   }
 });
 

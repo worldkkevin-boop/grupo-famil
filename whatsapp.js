@@ -34,6 +34,23 @@ async function startWhatsApp(reconnect = false) {
 
     sock.ev.on('creds.update', saveCreds);
 
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
+      for (const msg of messages) {
+        if (!msg.message || msg.key.fromMe) continue;
+        const remoteJid = msg.key.remoteJid;
+        if (!remoteJid || remoteJid.endsWith('@g.us')) continue;
+
+        if (onMessageReceivedCallback) {
+          try {
+            await onMessageReceivedCallback(msg, remoteJid);
+          } catch (e) {
+            console.error('Erro no processamento de mensagem recebida:', e);
+          }
+        }
+      }
+    });
+
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
@@ -132,6 +149,12 @@ async function resolveWhatsAppJid(numero) {
   return fallback;
 }
 
+let onMessageReceivedCallback = null;
+
+function setMessageReceivedCallback(cb) {
+  onMessageReceivedCallback = cb;
+}
+
 async function sendWhatsAppMessage(numero, texto) {
   if (connectionStatus !== 'connected' || !sock) {
     throw new Error('WhatsApp não está conectado.');
@@ -143,6 +166,28 @@ async function sendWhatsAppMessage(numero, texto) {
   const sent = await sock.sendMessage(targetJid, { text: texto });
   console.log(`📬 [WhatsApp] Mensagem despachada com sucesso! ID: ${sent?.key?.id}`);
   return { ok: true, jid: targetJid, keyId: sent?.key?.id };
+}
+
+async function sendWhatsAppMessages(numero, textos = []) {
+  if (connectionStatus !== 'connected' || !sock) {
+    throw new Error('WhatsApp não está conectado.');
+  }
+
+  const targetJid = await resolveWhatsAppJid(numero);
+  console.log(`📤 [WhatsApp] Enviando sequência de ${textos.length} mensagens para: ${targetJid}`);
+
+  const keys = [];
+  for (let i = 0; i < textos.length; i++) {
+    const texto = textos[i];
+    if (!texto || !String(texto).trim()) continue;
+    const sent = await sock.sendMessage(targetJid, { text: String(texto).trim() });
+    keys.push(sent?.key?.id);
+    if (i < textos.length - 1) {
+      await new Promise(r => setTimeout(r, 600)); // Pequena pausa para garantir ordem correta de entrega
+    }
+  }
+
+  return { ok: true, jid: targetJid, count: keys.length, keys };
 }
 
 async function disconnectWhatsApp() {
@@ -166,5 +211,7 @@ module.exports = {
   startWhatsApp,
   getWhatsAppStatus,
   sendWhatsAppMessage,
+  sendWhatsAppMessages,
+  setMessageReceivedCallback,
   disconnectWhatsApp
 };
