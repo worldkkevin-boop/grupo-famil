@@ -896,6 +896,7 @@ app.post('/api/admin/cobrar-automatico', async (req, res) => {
   const payloadPix = gerarPix(valorCentavos, grupo || {});
   const valorStr = (valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const chavePix = (grupo?.pix_key || PIX_KEY || '').trim();
+  const mes = mesAtual();
 
   // Mensagens em sequência isolada para permitir cópia em 1 toque no celular
   const mensagens = [
