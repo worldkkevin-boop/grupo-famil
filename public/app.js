@@ -940,6 +940,7 @@ function renderWhatsAppStatus(data) {
     if (qrContainer) qrContainer.classList.add('hidden');
     if (disconnectedActions) disconnectedActions.classList.add('hidden');
     if (waPollTimer) { clearInterval(waPollTimer); waPollTimer = null; }
+    carregarGruposWhatsApp();
   } else if (data.status === 'qr_ready' && data.qr_base64) {
     badge.textContent = '🟡 Aguardando Leitura';
     badge.style.background = 'rgba(234,179,8,0.2)';
@@ -1034,6 +1035,118 @@ $('btn-wa-testar')?.addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Testar';
+  }
+});
+
+// Gerenciamento de Grupo de WhatsApp da Família
+async function carregarGruposWhatsApp() {
+  const select = $('sel-wa-grupo');
+  if (!select) return;
+
+  try {
+    const res = await fetch('/api/admin/whatsapp/grupos', { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Falha ao carregar grupos');
+
+    select.innerHTML = '<option value="">-- Selecione o grupo da família --</option>';
+
+    if (!data.grupos || data.grupos.length === 0) {
+      select.innerHTML += '<option value="" disabled>Nenhum grupo encontrado (adicione o bot no grupo primeiro)</option>';
+    } else {
+      data.grupos.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = `${g.name} (${g.participantsCount} participantes)`;
+        if (data.grupo_vinculado && data.grupo_vinculado === g.id) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    }
+
+    if (data.grupo_vinculado && (!data.grupos || !data.grupos.some(g => g.id === data.grupo_vinculado))) {
+      const opt = document.createElement('option');
+      opt.value = data.grupo_vinculado;
+      opt.textContent = `Grupo Vinculado (${data.grupo_vinculado.slice(0, 15)}...)`;
+      opt.selected = true;
+      select.appendChild(opt);
+    }
+  } catch (err) {
+    console.warn('Erro ao carregar grupos:', err);
+    select.innerHTML = '<option value="">Erro ao carregar grupos</option>';
+  }
+}
+
+$('btn-wa-atualizar-grupos')?.addEventListener('click', carregarGruposWhatsApp);
+
+$('btn-wa-salvar-grupo')?.addEventListener('click', async () => {
+  const select = $('sel-wa-grupo');
+  const statusDiv = $('wa-grupo-status');
+  const grupoJid = select?.value;
+
+  if (!grupoJid) {
+    alert('Selecione um grupo da lista primeiro.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/whatsapp/salvar-grupo', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ whatsapp_group_jid: grupoJid })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Falha ao salvar');
+
+    if (statusDiv) {
+      statusDiv.style.display = 'block';
+      statusDiv.style.color = 'var(--success)';
+      statusDiv.textContent = '✅ Grupo da família vinculado com sucesso!';
+      setTimeout(() => { statusDiv.style.display = 'none'; }, 4000);
+    }
+  } catch (err) {
+    if (statusDiv) {
+      statusDiv.style.display = 'block';
+      statusDiv.style.color = 'var(--danger)';
+      statusDiv.textContent = `❌ ${err.message}`;
+    }
+  }
+});
+
+$('btn-wa-cobrar-grupo')?.addEventListener('click', async () => {
+  const btn = $('btn-wa-cobrar-grupo');
+  const statusDiv = $('wa-grupo-status');
+
+  if (!confirm('Deseja disparar a cobrança coletiva de assinaturas no grupo da família no WhatsApp agora?')) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando cobrança no grupo...';
+  if (statusDiv) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.color = 'var(--text-muted)';
+    statusDiv.textContent = 'Enviando Pix e informações no grupo...';
+  }
+
+  try {
+    const res = await fetch('/api/admin/whatsapp/cobrar-grupo', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Falha no disparo');
+
+    if (statusDiv) {
+      statusDiv.style.color = 'var(--success)';
+      statusDiv.textContent = '✅ Cobrança enviada com sucesso no grupo da família!';
+    }
+  } catch (err) {
+    if (statusDiv) {
+      statusDiv.style.color = 'var(--danger)';
+      statusDiv.textContent = `❌ ${err.message}`;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📢 Disparar Cobrança no Grupo da Família';
   }
 });
 

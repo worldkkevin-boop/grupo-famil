@@ -39,11 +39,14 @@ async function startWhatsApp(reconnect = false) {
       for (const msg of messages) {
         if (!msg.message || msg.key.fromMe) continue;
         const remoteJid = msg.key.remoteJid;
-        if (!remoteJid || remoteJid.endsWith('@g.us')) continue;
+        if (!remoteJid) continue;
+
+        const isGroup = remoteJid.endsWith('@g.us');
+        const senderJid = msg.key.participant || remoteJid;
 
         if (onMessageReceivedCallback) {
           try {
-            await onMessageReceivedCallback(msg, remoteJid);
+            await onMessageReceivedCallback(msg, remoteJid, isGroup, senderJid);
           } catch (e) {
             console.error('Erro no processamento de mensagem recebida:', e);
           }
@@ -106,8 +109,8 @@ async function resolveWhatsAppJid(numero) {
     throw new Error('WhatsApp não está conectado.');
   }
 
-  // Se já for um JID completo (incluindo @lid ou @s.whatsapp.net), usa diretamente!
-  if (typeof numero === 'string' && (numero.endsWith('@lid') || numero.endsWith('@s.whatsapp.net'))) {
+  // Se já for um JID completo (incluindo @lid, @s.whatsapp.net ou @g.us para grupos), usa diretamente!
+  if (typeof numero === 'string' && (numero.endsWith('@lid') || numero.endsWith('@s.whatsapp.net') || numero.endsWith('@g.us'))) {
     return numero;
   }
 
@@ -160,7 +163,7 @@ function setMessageReceivedCallback(cb) {
   onMessageReceivedCallback = cb;
 }
 
-async function sendWhatsAppMessage(numero, texto) {
+async function sendWhatsAppMessage(numero, texto, mentions = []) {
   if (connectionStatus !== 'connected' || !sock) {
     throw new Error('WhatsApp não está conectado.');
   }
@@ -168,12 +171,17 @@ async function sendWhatsAppMessage(numero, texto) {
   const targetJid = await resolveWhatsAppJid(numero);
   console.log(`📤 [WhatsApp] Enviando mensagem para: ${targetJid}`);
 
-  const sent = await sock.sendMessage(targetJid, { text: texto });
+  const payload = { text: texto };
+  if (mentions && mentions.length) {
+    payload.mentions = mentions;
+  }
+
+  const sent = await sock.sendMessage(targetJid, payload);
   console.log(`📬 [WhatsApp] Mensagem despachada com sucesso! ID: ${sent?.key?.id}`);
   return { ok: true, jid: targetJid, keyId: sent?.key?.id };
 }
 
-async function sendWhatsAppMessages(numero, textos = []) {
+async function sendWhatsAppMessages(numero, textos = [], mentions = []) {
   if (connectionStatus !== 'connected' || !sock) {
     throw new Error('WhatsApp não está conectado.');
   }
@@ -185,7 +193,11 @@ async function sendWhatsAppMessages(numero, textos = []) {
   for (let i = 0; i < textos.length; i++) {
     const texto = textos[i];
     if (!texto || !String(texto).trim()) continue;
-    const sent = await sock.sendMessage(targetJid, { text: String(texto).trim() });
+    const payload = { text: String(texto).trim() };
+    if (mentions && mentions.length && i === 0) {
+      payload.mentions = mentions;
+    }
+    const sent = await sock.sendMessage(targetJid, payload);
     keys.push(sent?.key?.id);
     if (i < textos.length - 1) {
       await new Promise(r => setTimeout(r, 600)); // Pequena pausa para garantir ordem correta de entrega
@@ -193,6 +205,21 @@ async function sendWhatsAppMessages(numero, textos = []) {
   }
 
   return { ok: true, jid: targetJid, count: keys.length, keys };
+}
+
+async function getParticipatingGroups() {
+  if (!sock || connectionStatus !== 'connected') return [];
+  try {
+    const groups = await sock.groupFetchAllParticipating();
+    return Object.values(groups).map(g => ({
+      id: g.id,
+      name: g.subject,
+      participantsCount: g.participants?.length || 0
+    }));
+  } catch (err) {
+    console.warn('Erro ao listar grupos participantes:', err.message);
+    return [];
+  }
 }
 
 async function disconnectWhatsApp() {
@@ -217,6 +244,7 @@ module.exports = {
   getWhatsAppStatus,
   sendWhatsAppMessage,
   sendWhatsAppMessages,
+  getParticipatingGroups,
   setMessageReceivedCallback,
   disconnectWhatsApp
 };

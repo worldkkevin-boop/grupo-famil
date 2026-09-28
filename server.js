@@ -118,6 +118,7 @@ for (const col of [
   'ALTER TABLE membros ADD COLUMN push_sub TEXT',
   'ALTER TABLE pagamentos ADD COLUMN comprovante_url TEXT',
   'ALTER TABLE pagamentos ADD COLUMN observacao TEXT',
+  'ALTER TABLE grupos ADD COLUMN whatsapp_group_jid TEXT',
 ]) { try { db.exec(col); } catch {} }
 
 // Auto vincula LID do Kevin (membro 1) caso ainda não esteja preenchido
@@ -882,7 +883,78 @@ app.post('/api/admin/whatsapp/enviar-teste', async (req, res) => {
   }
 });
 
-// Cobrança 100% Automática via WhatsApp
+// Listar grupos do WhatsApp onde o bot participa
+app.get('/api/admin/whatsapp/grupos', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
+  try {
+    const gruposWa = await whatsapp.getParticipatingGroups();
+    const g = db.prepare('SELECT whatsapp_group_jid FROM grupos WHERE id=?').get(session.grupo_id);
+    res.json({
+      grupos: gruposWa,
+      grupo_vinculado: g?.whatsapp_group_jid || null
+    });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// Salvar grupo de WhatsApp vinculado
+app.post('/api/admin/whatsapp/salvar-grupo', (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
+  const { whatsapp_group_jid } = req.body;
+  db.prepare('UPDATE grupos SET whatsapp_group_jid=? WHERE id=?').run(whatsapp_group_jid || null, session.grupo_id);
+  res.json({ ok: true, whatsapp_group_jid });
+});
+
+// Cobrança Coletiva no Grupo do WhatsApp
+app.post('/api/admin/whatsapp/cobrar-grupo', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
+  const grupo = db.prepare('SELECT id, pix_key, pix_name, pix_city, whatsapp_group_jid FROM grupos WHERE id=?').get(session.grupo_id);
+  if (!grupo || !grupo.whatsapp_group_jid) {
+    return res.status(400).json({ erro: 'Nenhum grupo de WhatsApp vinculado. Vincule o grupo primeiro nas configurações.' });
+  }
+
+  const membros = db.prepare('SELECT id, nome, email, telefone, foto_url, ativo FROM membros WHERE grupo_id=?').all(session.grupo_id);
+  const cotas = calcularCotas(membros, session.grupo_id);
+  const cotaPadrao = cotas.find(c => c.cota > 0);
+  const valorCentavos = cotaPadrao ? cotaPadrao.cota : 0;
+  if (valorCentavos <= 0) return res.status(400).json({ erro: 'Nenhuma assinatura ativa encontrada para rateio.' });
+
+  const payloadPix = gerarPix(valorCentavos, grupo || {});
+  const valorStr = (valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const diaVencimento = getConfig('dia_vencimento', '10', session.grupo_id);
+  const mes = mesAtual();
+  const chavePix = (grupo.pix_key || PIX_KEY || '').trim();
+
+  // Mensagens curtas e práticas para o grupo:
+  const mensagens = [
+    `📢 *Faturas FAMIl - Mês ${mes} Disponíveis!*\n💰 Valor individual: *${valorStr}*\n📅 Vencimento dia *${diaVencimento}*.\n\n⚡ Segue o código *Pix Copia e Cola*:`,
+    payloadPix // Mensagem isolada com APENAS o código Pix
+  ];
+
+  if (chavePix) {
+    mensagens.push(`🔑 *Chave Pix:*\n${chavePix}`);
+  }
+
+  mensagens.push(`Assim que efetuar o pagamento, só mandar o comprovante aqui no grupo que eu dou baixa na hora! 🤖`);
+
+  try {
+    const envio = await whatsapp.sendWhatsAppMessages(grupo.whatsapp_group_jid, mensagens);
+    console.log(`[Cobrança Grupo] ✅ Disparadas ${mensagens.length} mensagens no grupo: ${grupo.whatsapp_group_jid}`);
+    res.json({ ok: true, enviado: true, jid: grupo.whatsapp_group_jid });
+  } catch (err) {
+    console.error(`[Cobrança Grupo] ❌ Erro ao disparar no grupo:`, err);
+    res.status(500).json({ erro: 'Falha no disparo do grupo: ' + err.message });
+  }
+});
+
+// Cobrança 100% Automática Individual via WhatsApp
 app.post('/api/admin/cobrar-automatico', async (req, res) => {
   const session = getSession(req);
   if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
@@ -927,11 +999,12 @@ app.post('/api/admin/cobrar-automatico', async (req, res) => {
   }
 });
 
-// ── WhatsApp Bot: Auto Detecção de Comprovante de Pagamento ───────────────────
-whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
+// ── WhatsApp Bot: Auto Detecção de Comprovante de Pagamento (Privado & Grupo) ───
+whatsapp.setMessageReceivedCallback(async (msg, remoteJid, isGroup, senderJid) => {
   try {
     const rawJid = String(remoteJid);
-    const digits = rawJid.replace(/\D/g, '');
+    const actualSender = String(senderJid || remoteJid);
+    const digits = actualSender.replace(/\D/g, '');
     const ultimos8 = digits.slice(-8);
 
     const isImage = Boolean(msg.message?.imageMessage);
@@ -944,21 +1017,29 @@ whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
     ).toLowerCase();
 
     const pushName = String(msg.pushName || '').trim();
-    console.log(`[WhatsApp Bot] 📩 Mensagem recebida de ${rawJid} | PushName: "${pushName}" | Mídia: ${isImage ? 'Foto' : (isDoc ? 'Doc' : 'Não')} | Texto: "${texto.slice(0, 60)}"`);
+    console.log(`[WhatsApp Bot] 📩 Mensagem de ${rawJid} (Remetente: ${actualSender}, Grupo: ${Boolean(isGroup)}) | PushName: "${pushName}" | Mídia: ${isImage ? 'Foto' : (isDoc ? 'Doc' : 'Não')} | Texto: "${texto.slice(0, 60)}"`);
+
+    // Comando rápido no grupo do WhatsApp: /vincular ou /conectar-grupo
+    if (isGroup && (texto.startsWith('/vincular') || texto.startsWith('/conectar') || texto.startsWith('/grupo'))) {
+      db.prepare('UPDATE grupos SET whatsapp_group_jid=? WHERE id=1').run(rawJid);
+      console.log(`[WhatsApp Bot] 🔗 Grupo do WhatsApp vinculado com sucesso via comando: ${rawJid}`);
+      await whatsapp.sendWhatsAppMessage(rawJid, '🤖 *Grupo FAMIl Conectado!*\nA partir de agora, as cobranças coletivas e confirmações de comprovantes funcionarão diretamente aqui! 🚀');
+      return;
+    }
 
     // Busca todos os membros ativos
     const membros = db.prepare('SELECT id, nome, grupo_id, telefone, whatsapp_lid FROM membros WHERE ativo=1').all();
 
     // 1. Tenta achar por whatsapp_lid
-    let membro = membros.find(m => m.whatsapp_lid && (m.whatsapp_lid === digits || rawJid.startsWith(m.whatsapp_lid)));
+    let membro = membros.find(m => m.whatsapp_lid && (m.whatsapp_lid === digits || actualSender.startsWith(m.whatsapp_lid)));
 
     // 2. Se não achou por LID e o remetente não for @lid, tenta por telefone
-    if (!membro && !rawJid.endsWith('@lid')) {
+    if (!membro && !actualSender.endsWith('@lid')) {
       membro = membros.find(m => m.telefone && String(m.telefone).replace(/\D/g, '').endsWith(ultimos8));
     }
 
     // 3. Se for @lid e ainda não foi associado a um membro:
-    if (!membro && rawJid.endsWith('@lid')) {
+    if (!membro && actualSender.endsWith('@lid')) {
       // 3.1. Verifica pelo pushName do WhatsApp
       if (pushName) {
         const pLower = pushName.toLowerCase();
@@ -1002,7 +1083,7 @@ whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
     }
 
     if (!membro) {
-      console.log(`[WhatsApp Bot] ⚠️ Não foi possível identificar o membro para o remetente: ${rawJid} (${pushName})`);
+      console.log(`[WhatsApp Bot] ⚠️ Não foi possível identificar o membro para o remetente: ${actualSender} (${pushName})`);
       return;
     }
 
@@ -1010,7 +1091,7 @@ whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
     const isComprovante = isImage || isDoc || /pago|paguei|comprovante|pix|wise|transferi|enviei|ta pago|tá pago|concluido|concluído|enviar dinheiro/.test(texto);
 
     if (isComprovante) {
-      console.log(`📥 [WhatsApp Bot] ✅ Comprovante confirmado para: ${membro.nome} (ID: ${membro.id})!`);
+      console.log(`📥 [WhatsApp Bot] ✅ Comprovante confirmado para: ${membro.nome} (ID: ${membro.id}, Grupo: ${Boolean(isGroup)})!`);
 
       const mes = mesAtual();
       const row = db.prepare('SELECT id, pago FROM pagamentos WHERE membro_id=? AND mes_referencia=? AND grupo_id=?').get(membro.id, mes, membro.grupo_id);
@@ -1023,18 +1104,24 @@ whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
 
       console.log(`✅ [WhatsApp Bot] Pagamento do mês ${mes} baixado para ${membro.nome}!`);
 
-      // Envia confirmação automática respondendo diretamente na conversa ativa (rawJid)
-      const confirmacao = [
-        `✅ *Comprovante recebido com sucesso, ${membro.nome}!* 🙌`,
-        `Identifiquei o seu pagamento e a sua fatura da assinatura do mês (*${mes}*) já está marcada como *PAGA* no nosso painel.\n\nMuito obrigado! 🚀`
-      ];
-      await whatsapp.sendWhatsAppMessages(rawJid, confirmacao);
+      if (isGroup) {
+        // Mensagem curta e descontraída dentro do grupo da família
+        const msgGrupo = `✅ *Pagamento confirmado, ${membro.nome}!* Fatura de *${mes}* baixada como *PAGA*. Valeu! 🙌`;
+        await whatsapp.sendWhatsAppMessage(rawJid, msgGrupo, [actualSender]);
+      } else {
+        // Mensagem no privado
+        const confirmacao = [
+          `✅ *Pagamento confirmado, ${membro.nome}!* 🙌`,
+          `Identifiquei o seu pagamento e a sua fatura da assinatura do mês (*${mes}*) já está marcada como *PAGA* no nosso painel.\n\nMuito obrigado! 🚀`
+        ];
+        await whatsapp.sendWhatsAppMessages(rawJid, confirmacao);
+      }
 
-      // Notifica o administrador do grupo se for um membro diferente
+      // Notifica o administrador do grupo se for um membro diferente e estiver no privado
       try {
         const dono = db.prepare('SELECT dono_email FROM grupos WHERE id=?').get(membro.grupo_id);
         const adminMembro = db.prepare('SELECT telefone FROM membros WHERE grupo_id=? AND email=?').get(membro.grupo_id, dono?.dono_email);
-        if (adminMembro && adminMembro.telefone && !String(adminMembro.telefone).endsWith(ultimos8)) {
+        if (!isGroup && adminMembro && adminMembro.telefone && !String(adminMembro.telefone).endsWith(ultimos8)) {
           await whatsapp.sendWhatsAppMessage(
             adminMembro.telefone,
             `🔔 *Robô FAMIl - Pagamento Confirmado!*\nO membro *${membro.nome}* acabou de enviar o comprovante no WhatsApp.\nO mês *${mes}* já foi baixado como *PAGO* automaticamente no painel!`

@@ -334,13 +334,32 @@
             </div>
             <button id="btn-wa-desconectar" style="padding:6px 12px; border-radius:8px; background:rgba(248,113,113,0.15); color:var(--danger); border:1px solid rgba(248,113,113,0.3); cursor:pointer; font-size:0.8rem; font-weight:600;">Desconectar</button>
           </div>
-          <div style="border-top: 1px dashed rgba(16,185,129,0.25); padding-top: 10px;">
+          <div style="border-top: 1px dashed rgba(16,185,129,0.25); padding-top: 10px; margin-bottom: 12px;">
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 600;">🧪 Testar disparo de mensagem:</div>
             <div style="display:flex; gap:6px;">
               <input type="text" id="wa-test-num" placeholder="DDD + Número (ex: 96991767788)" style="flex:1; padding:6px 10px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:#fff; font-size:0.8rem;">
               <button id="btn-wa-testar" class="btn-main" style="padding:6px 12px; font-size:0.8rem; white-space:nowrap;">Testar</button>
             </div>
             <div id="wa-test-status" style="font-size:0.75rem; margin-top:6px; display:none;"></div>
+          </div>
+
+          <!-- Grupo de WhatsApp da Família -->
+          <div style="border-top: 1px dashed rgba(16,185,129,0.25); padding-top: 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+              <div style="font-size: 0.8rem; color: var(--text); font-weight: 700;">👥 Grupo de WhatsApp da Família:</div>
+              <button id="btn-wa-atualizar-grupos" style="background:none; border:none; color:var(--primary-light); cursor:pointer; font-size:0.75rem; text-decoration:underline;">🔄 Atualizar Grupos</button>
+            </div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">Adicione o bot no seu grupo e selecione ele aqui. O bot envia a cobrança geral e responde aos comprovantes direto no grupo!</p>
+            <div style="display:flex; gap:6px; margin-bottom: 8px;">
+              <select id="sel-wa-grupo" style="flex:1; padding:7px 10px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:#fff; font-size:0.8rem;">
+                <option value="">Carregando grupos...</option>
+              </select>
+              <button id="btn-wa-salvar-grupo" class="btn-main" style="padding:7px 12px; font-size:0.8rem; white-space:nowrap;">Vincular</button>
+            </div>
+            <button id="btn-wa-cobrar-grupo" class="btn-main" style="width:100%; padding:9px; font-size:0.85rem; background:linear-gradient(135deg, #3b82f6, #2563eb); font-weight:700;">
+              📢 Disparar Cobrança no Grupo da Família
+            </button>
+            <div id="wa-grupo-status" style="font-size:0.75rem; margin-top:6px; display:none;"></div>
           </div>
         </div>
 
