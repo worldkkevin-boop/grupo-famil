@@ -34,24 +34,30 @@ if ('serviceWorker' in navigator) {
 let deferredPrompt = null;
 
 function checkStandalone() {
-  // Ignora o bloqueio se for o admin logado acessando pelo PC para gerenciar, ou se já estiver standalone
-  // Na verdade, a regra pediu obrigatoriedade, vamos aplicar a todos:
+  const isDesktop = !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-  
-  if (!isStandalone) {
-    $('pwa-strict-blocker').classList.remove('hidden');
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    if (isIOS) {
-      $('pwa-blocker-ios').classList.remove('hidden');
-      $('pwa-blocker-android').classList.add('hidden');
-    } else {
-      $('pwa-blocker-android').classList.remove('hidden');
-      $('pwa-blocker-ios').classList.add('hidden');
-    }
-  } else {
+  const skipPwa = localStorage.getItem('skip_pwa_blocker') === 'true';
+
+  if (isDesktop || isStandalone || skipPwa) {
     $('pwa-strict-blocker').classList.add('hidden');
+    return;
+  }
+
+  $('pwa-strict-blocker').classList.remove('hidden');
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS) {
+    $('pwa-blocker-ios').classList.remove('hidden');
+    $('pwa-blocker-android').classList.add('hidden');
+  } else {
+    $('pwa-blocker-android').classList.remove('hidden');
+    $('pwa-blocker-ios').classList.add('hidden');
   }
 }
+
+$('btn-skip-pwa')?.addEventListener('click', () => {
+  localStorage.setItem('skip_pwa_blocker', 'true');
+  $('pwa-strict-blocker').classList.add('hidden');
+});
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
@@ -147,9 +153,13 @@ async function fazerLoginEmail() {
   }
 }
 
-$('btn-logout')?.addEventListener('click', () => {
+$('btn-logout')?.addEventListener('click', async () => {
+  try {
+    await fetch('/api/logout', { method: 'POST', headers: getAuthHeaders() });
+  } catch (e) {}
   localStorage.removeItem('userToken');
   localStorage.removeItem('userRole');
+  localStorage.removeItem('isSuperadmin');
   loadStatus();
 });
 
@@ -294,6 +304,42 @@ function render(data) {
         <button class="btn-del-assinatura" data-id="${a.id}" style="background:none; border:none; color:var(--danger); cursor:pointer;">🗑️</button>
       </li>
     `).join('');
+
+    // Telefones dos Membros (WhatsApp)
+    const telContainer = $('admin-telefones-list');
+    if (telContainer) {
+      telContainer.innerHTML = ativos.map(m => `
+        <div style="display:flex; gap:8px; align-items:center; background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px;">
+          <span style="flex:1; font-size:0.85rem; font-weight:600; color:var(--text);">${m.nome}</span>
+          <input type="tel" id="tel-membro-${m.id}" value="${m.telefone || ''}" placeholder="Ex: 96991234567" style="width:140px; padding:6px 8px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:#fff; font-size:0.8rem;">
+          <button class="btn-salvar-tel" data-id="${m.id}" style="padding:6px 12px; border-radius:6px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-size:0.75rem; font-weight:600;">Salvar</button>
+        </div>
+      `).join('');
+
+      telContainer.querySelectorAll('.btn-salvar-tel').forEach(btn => {
+        btn.onclick = async () => {
+          const mId = btn.dataset.id;
+          const input = $(`tel-membro-${mId}`);
+          const tel = input ? input.value.trim() : '';
+          const originalText = btn.textContent;
+          btn.textContent = 'Salvando...';
+          try {
+            await fetch('/api/admin/membro/telefone', {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ membro_id: parseInt(mId, 10), telefone: tel })
+            });
+            btn.textContent = '✅ Salvo!';
+            setTimeout(() => btn.textContent = originalText, 2000);
+            const membro = state.membros.find(x => x.id === parseInt(mId, 10));
+            if (membro) membro.telefone = tel;
+          } catch (e) {
+            alert('Erro ao salvar telefone: ' + e.message);
+            btn.textContent = originalText;
+          }
+        };
+      });
+    }
   }
 }
 
@@ -332,10 +378,13 @@ function buildCard(m) {
   if (!isPaid) {
     if (state.isAdmin) {
       actionBtn = `
-        <button class="btn-pix" data-action="cobrar" data-membro-id="${m.id}" style="background:var(--secondary); font-size: 0.8rem; padding: 10px 5px;" aria-label="Cobrar ${m.nome}">
+        <button class="btn-pix" data-action="pix" data-membro-id="${m.id}" style="padding: 10px 8px; font-size: 0.8rem;" aria-label="Ver Pix de ${m.nome}">
+          ⚡ Pix
+        </button>
+        <button class="btn-pix" data-action="cobrar" data-membro-id="${m.id}" style="background:var(--secondary); font-size: 0.8rem; padding: 10px 8px;" aria-label="Cobrar ${m.nome} no WhatsApp">
           💬 Cobrar
         </button>
-        <button class="btn-pix" data-action="marcar-pago" data-membro-id="${m.id}" style="background:var(--success); font-size: 0.8rem; padding: 10px 5px;" aria-label="Marcar pago">
+        <button class="btn-pix" data-action="marcar-pago" data-membro-id="${m.id}" style="background:var(--success); font-size: 0.8rem; padding: 10px 8px;" aria-label="Marcar pago">
           ✓ Pago
         </button>
       `;
@@ -356,11 +405,7 @@ function buildCard(m) {
                      Desfazer pagamento
                    </button>`;
     } else {
-      if (m.id === state.me_id) {
-        actionBtn = `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);">✅ Já Pago</div>`;
-      } else {
-        actionBtn = `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;font-size:0.8rem;">✅ Já Pago</div>`;
-      }
+      actionBtn = `<div style="flex:1;text-align:center;color:var(--success);font-weight:600;padding:10px;border:1px dashed var(--success);border-radius:var(--radius-sm);font-size:0.85rem;">✅ Já Pago</div>`;
     }
   }
 
@@ -376,6 +421,7 @@ function buildCard(m) {
         <div class="member-info">
           <span class="member-name">${m.nome}</span>
           ${state.isAdmin && m.email ? `<span style="font-size:0.65rem;color:var(--text-muted);user-select:all;">${m.email}</span>` : ''}
+          ${state.isAdmin && m.telefone ? `<span style="font-size:0.65rem;color:var(--primary-light);">📱 ${m.telefone}</span>` : ''}
           ${isPaid ? '<span class="paid-badge">✓ Pago</span>' : ''}
         </div>
       </div>
@@ -418,10 +464,20 @@ $('members-grid').addEventListener('click', async e => {
       const data = await res.json();
       if (!data.payload) throw new Error('Erro ao gerar Pix');
       
-      const msg = `Oi ${m.nome}! A sua parte da assinatura familiar (R$ ${fmt(m.cota)}) já fechou neste mês.\n\nPix Copia e Cola:\n${data.payload}`;
-      const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
-      window.open(url, '_blank');
+      const valorStr = fmt(m.cota);
+      const chavePix = state.pix_key || '01749132222';
+      const msg = `Olá, ${m.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (${mesLabel(state.mes)}) está disponível no valor de *${valorStr}*.\n\n🔑 *Chave Pix (Celular):*\n${chavePix}\n\n⚡ *Pix Copia e Cola:*\n\`\`\`${data.payload}\`\`\`\n\nAssim que efetuar o pagamento, me confirma por aqui! Obrigado! 🙌`;
       
+      let url = '';
+      if (m.telefone && m.telefone.replace(/\D/g, '').length >= 10) {
+        const cleanTel = m.telefone.replace(/\D/g, '');
+        const ddiTel = cleanTel.startsWith('55') ? cleanTel : `55${cleanTel}`;
+        url = `https://wa.me/${ddiTel}?text=${encodeURIComponent(msg)}`;
+      } else {
+        url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+      }
+      
+      window.open(url, '_blank');
       cobrar.textContent = '💬 Cobrar';
       cobrar.disabled = false;
     } catch (err) {
@@ -778,6 +834,48 @@ $('btn-disparar-push')?.addEventListener('click', async () => {
   
   btn.disabled = false;
   btn.textContent = '🔔 Disparar Cobrança Agora';
+});
+
+// Alterar Senha Admin
+$('btn-salvar-nova-senha')?.addEventListener('click', async () => {
+  const input = $('nova-senha-admin');
+  const msg = $('msg-senha-status');
+  const novaSenha = input ? input.value.trim() : '';
+  if (!novaSenha || novaSenha.length < 4) {
+    if (msg) {
+      msg.textContent = 'A senha deve ter no mínimo 4 caracteres.';
+      msg.style.color = 'var(--danger)';
+      msg.style.display = 'block';
+    }
+    return;
+  }
+  const btn = $('btn-salvar-nova-senha');
+  const oldText = btn.textContent;
+  btn.textContent = 'Salvando...';
+  try {
+    const res = await fetch('/api/admin/alterar-senha', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ nova_senha: novaSenha })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Erro ao alterar senha');
+    if (msg) {
+      msg.textContent = '✅ Senha alterada com sucesso!';
+      msg.style.color = 'var(--success)';
+      msg.style.display = 'block';
+    }
+    input.value = '';
+    setTimeout(() => { if (msg) msg.style.display = 'none'; }, 3000);
+  } catch (err) {
+    if (msg) {
+      msg.textContent = '❌ ' + err.message;
+      msg.style.color = 'var(--danger)';
+      msg.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = oldText;
+  }
 });
 
 // Setup Inicial

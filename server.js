@@ -82,6 +82,15 @@ db.exec(`
     grupo_id       INTEGER DEFAULT 1,
     PRIMARY KEY (chave, grupo_id)
   );
+  CREATE TABLE IF NOT EXISTS sessoes (
+    token         TEXT PRIMARY KEY,
+    role          TEXT NOT NULL,
+    membro_id     INTEGER,
+    grupo_id      INTEGER NOT NULL,
+    nome          TEXT,
+    is_superadmin INTEGER DEFAULT 0,
+    expira_em     TEXT NOT NULL
+  );
 `);
 
 // Tenta adicionar colunas novas em tabelas existentes (Migrations simples)
@@ -102,6 +111,9 @@ for (const col of [
   'ALTER TABLE grupos ADD COLUMN senha_hash TEXT',
   'ALTER TABLE membros ADD COLUMN senha_hash TEXT',
   'ALTER TABLE grupos ADD COLUMN saas_pago_ate TEXT',
+  'ALTER TABLE membros ADD COLUMN telefone TEXT',
+  'ALTER TABLE pagamentos ADD COLUMN comprovante_url TEXT',
+  'ALTER TABLE pagamentos ADD COLUMN observacao TEXT',
 ]) { try { db.exec(col); } catch {} }
 
 // Fix do Schema do Config (Migrations)
@@ -121,17 +133,28 @@ try {
   console.error("Erro ao migrar config:", err);
 }
 
-// Seed inicial: Grupo 1 (O grupo legadado do Admin principal)
-const { cntGrupos } = db.prepare('SELECT COUNT(*) as cnt FROM grupos').get();
-if (cntGrupos === 0) {
-  const ins = db.prepare('INSERT INTO grupos (id, nome, dono_email, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  ins.run(1, 'Grupo FAMIl Principal', ADMIN_EMAIL, PIX_KEY, PIX_NAME, PIX_CITY, new Date().toISOString());
-  console.log('✅  Grupo inicial (SaaS) criado para o dono:', ADMIN_EMAIL);
+// Senha padrão para o admin principal
+const defaultAdminSenha = process.env.ADMIN_PASSWORD || 'admin123';
+const defaultAdminHash  = hashPassword(defaultAdminSenha);
+
+// Seed inicial: Grupo 1 (O grupo legado do Admin principal)
+const rowGrupos = db.prepare('SELECT COUNT(*) as cnt FROM grupos').get();
+if (!rowGrupos || rowGrupos.cnt === 0) {
+  const ins = db.prepare('INSERT INTO grupos (id, nome, dono_email, senha_hash, pix_key, pix_name, pix_city, data_criacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  ins.run(1, 'Grupo FAMIl Principal', ADMIN_EMAIL, defaultAdminHash, PIX_KEY, PIX_NAME, PIX_CITY, new Date().toISOString());
+  console.log('✅  Grupo inicial (SaaS) criado para o dono:', ADMIN_EMAIL, '(senha padrão ativa)');
+} else {
+  // Garante que o grupo 1 tenha senha_hash caso tenha sido criado vazio anteriormente
+  const g1 = db.prepare('SELECT senha_hash FROM grupos WHERE id=1').get();
+  if (g1 && (!g1.senha_hash || g1.senha_hash.trim() === '')) {
+    db.prepare('UPDATE grupos SET senha_hash=? WHERE id=1').run(defaultAdminHash);
+    console.log('✅  Senha padrão configurada para o Grupo 1');
+  }
 }
 
 // Seed inicial: membros
-const { cntMembros } = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
-if (cntMembros === 0) {
+const rowMembros = db.prepare('SELECT COUNT(*) as cnt FROM membros').get();
+if (!rowMembros || rowMembros.cnt === 0) {
   const ins = db.prepare('INSERT INTO membros (nome, ativo) VALUES (?, ?)');
   [['Kevin',1],['Gaby',1],['Membro 3',0],['Membro 4',0],['Membro 5',0],['Membro 6',0]]
     .forEach(([n, a]) => ins.run(n, a));
@@ -139,8 +162,8 @@ if (cntMembros === 0) {
 }
 
 // Seed inicial: assinaturas
-const { cntAssinaturas } = db.prepare('SELECT COUNT(*) as cnt FROM assinaturas').get();
-if (cntAssinaturas === 0) {
+const rowAssinaturas = db.prepare('SELECT COUNT(*) as cnt FROM assinaturas').get();
+if (!rowAssinaturas || rowAssinaturas.cnt === 0) {
   const ins = db.prepare('INSERT INTO assinaturas (nome, valor_centavos, ativo) VALUES (?, ?, 1)');
   ins.run('Google AI Pro 5TB', 4849);
   ins.run('YouTube Premium Família', 5390);
@@ -148,8 +171,8 @@ if (cntAssinaturas === 0) {
 }
 
 // Seed inicial: config
-const { cntConfig } = db.prepare('SELECT COUNT(*) as cnt FROM config').get();
-if (cntConfig === 0) {
+const rowConfig = db.prepare('SELECT COUNT(*) as cnt FROM config').get();
+if (!rowConfig || rowConfig.cnt === 0) {
   const ins = db.prepare('INSERT INTO config (chave, valor) VALUES (?, ?)');
   ins.run('dia_vencimento', '10');
   ins.run('modo_pagamento', 'rateio'); // 'rateio' ou ID do membro (ex: '3')
@@ -251,11 +274,58 @@ async function verificarTokenGoogle(id_token) {
   return info; // { sub, name, email, picture, ... }
 }
 
-const sessionTokens = new Map(); // token -> { role: 'admin'|'member', membro_id: number|null }
+// ── Gerenciamento Persistente de Sessões (SQLite + Cache) ─────────────────────
+const sessionCache = new Map();
+
+function salvarSessao(token, data) {
+  const expiraEm = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    db.prepare(`
+      INSERT OR REPLACE INTO sessoes (token, role, membro_id, grupo_id, nome, is_superadmin, expira_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(token, data.role, data.membro_id || null, data.grupo_id, data.nome || '', data.is_superadmin ? 1 : 0, expiraEm);
+  } catch (err) {
+    console.error('Erro ao salvar sessão no SQLite:', err);
+  }
+  sessionCache.set(token, { ...data, expira_em: expiraEm });
+}
+
 function getSession(req) {
   const auth = req.headers.authorization;
   if (!auth) return null;
-  return sessionTokens.get(auth.split(' ')[1]) || null;
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : auth.trim();
+  if (!token) return null;
+
+  if (sessionCache.has(token)) {
+    return sessionCache.get(token);
+  }
+
+  try {
+    const row = db.prepare('SELECT role, membro_id, grupo_id, nome, is_superadmin, expira_em FROM sessoes WHERE token=?').get(token);
+    if (!row) return null;
+
+    if (new Date(row.expira_em) < new Date()) {
+      db.prepare('DELETE FROM sessoes WHERE token=?').run(token);
+      return null;
+    }
+
+    const sess = {
+      role: row.role,
+      membro_id: row.membro_id,
+      grupo_id: row.grupo_id,
+      nome: row.nome,
+      is_superadmin: Boolean(row.is_superadmin)
+    };
+    sessionCache.set(token, sess);
+    return sess;
+  } catch {
+    return null;
+  }
+}
+
+function deletarSessao(token) {
+  sessionCache.delete(token);
+  try { db.prepare('DELETE FROM sessoes WHERE token=?').run(token); } catch {}
 }
 
 // ── Middlewares ───────────────────────────────────────────────────────────────
@@ -311,8 +381,17 @@ app.post('/api/login/email', (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   const isSuperadmin = (emailLower === 'worldkkevin@gmail.com');
   
-  sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome, is_superadmin: isSuperadmin });
+  salvarSessao(token, { role, membro_id: membroId, grupo_id: grupoId, nome, is_superadmin: isSuperadmin });
   res.json({ token, role, nome, is_superadmin: isSuperadmin });
+});
+
+app.post('/api/logout', (req, res) => {
+  const auth = req.headers.authorization;
+  if (auth) {
+    const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : auth.trim();
+    if (token) deletarSessao(token);
+  }
+  res.json({ ok: true });
 });
 
 // ── API: Status ───────────────────────────────────────────────────────────────
@@ -335,7 +414,7 @@ app.get('/api/status', (req, res) => {
     if (diffDias > 7) saas_bloqueado = true;
   }
 
-  const membros = db.prepare('SELECT id, nome, email, foto_url, ativo FROM membros WHERE grupo_id=?').all(grupo_id);
+  const membros = db.prepare('SELECT id, nome, email, telefone, foto_url, ativo FROM membros WHERE grupo_id=?').all(grupo_id);
   const comCotas = calcularCotas(membros, grupo_id);
 
   const pagamentos = db.prepare('SELECT membro_id FROM pagamentos WHERE mes_referencia=? AND pago=1 AND grupo_id=?').all(mes, grupo_id);
@@ -343,7 +422,10 @@ app.get('/api/status', (req, res) => {
 
   comCotas.forEach(m => {
     const isPaid = pagos.has(m.id);
-    if (!isAdmin) delete m.email; // Oculta emails para não-admins
+    if (!isAdmin) {
+      delete m.email;
+      delete m.telefone;
+    }
     m.pago = isPaid;
   });
 
@@ -679,7 +761,7 @@ app.post('/api/login', async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex');
     const isSuperadmin = (info.email.toLowerCase() === 'worldkkevin@gmail.com');
     
-    sessionTokens.set(token, { role, membro_id: membroId, grupo_id: grupoId, nome: info.name, is_superadmin: isSuperadmin });
+    salvarSessao(token, { role, membro_id: membroId, grupo_id: grupoId, nome: info.name, is_superadmin: isSuperadmin });
     
     res.json({ token, role, nome: info.name, is_superadmin: isSuperadmin });
   } catch (e) {
@@ -736,6 +818,24 @@ app.post('/api/admin/config', (req, res) => {
   if (modo_pagamento !== undefined) upsert('modo_pagamento', modo_pagamento);
 
   res.json({ ok: true });
+});
+
+app.post('/api/admin/membro/telefone', (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+  const { membro_id, telefone } = req.body;
+  db.prepare('UPDATE membros SET telefone=? WHERE id=? AND grupo_id=?').run(telefone || null, membro_id, session.grupo_id);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/alterar-senha', (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+  const { nova_senha } = req.body;
+  if (!nova_senha || nova_senha.length < 4) return res.status(400).json({ erro: 'A senha deve ter pelo menos 4 caracteres' });
+  const hash = hashPassword(nova_senha);
+  db.prepare('UPDATE grupos SET senha_hash=? WHERE id=?').run(hash, session.grupo_id);
+  res.json({ ok: true, mensagem: 'Senha alterada com sucesso!' });
 });
 
 // ── Helper para Processar Pagamento SaaS ──────────────────────────────────────

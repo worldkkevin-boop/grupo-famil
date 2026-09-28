@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=6.13" />
+  <link rel="stylesheet" href="style.css?v=7.0" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -226,6 +226,9 @@
       <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 24px;">
         Se você já instalou, abra pelo ícone salvo na sua tela inicial.
       </p>
+      <button id="btn-skip-pwa" type="button" style="margin-top: 18px; background: none; border: none; color: var(--text-muted); font-size: 0.85rem; text-decoration: underline; cursor: pointer; display: block; width: 100%;">
+        Continuar no Navegador (Modo Web)
+      </button>
     </div>
   </div>
 
@@ -307,10 +310,27 @@
         </button>
       </div>
 
+      <!-- WhatsApp dos Membros -->
+      <div style="padding-top: 24px; border-top: 1px solid var(--border);">
+        <h3 style="font-size: 0.95rem; margin-bottom: 8px; color: var(--text);">WhatsApp dos Membros</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Cadastre o DDD + Número (ex: 96991234567) para a cobrança abrir direto no WhatsApp do membro.</p>
+        <div id="admin-telefones-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <!-- Alterar Senha de Acesso -->
+      <div style="padding-top: 24px; border-top: 1px solid var(--border); margin-bottom: 12px;">
+        <h3 style="font-size: 0.95rem; margin-bottom: 8px; color: var(--text);">Alterar Senha do Administrador</h3>
+        <div style="display:flex; gap:8px;">
+          <input type="password" id="nova-senha-admin" placeholder="Nova senha (mínimo 4 dígitos)" style="flex:1; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:#fff; font-size:0.85rem;">
+          <button id="btn-salvar-nova-senha" class="btn-main" style="padding:10px 14px; border-radius:8px; font-size:0.85rem;">Salvar</button>
+        </div>
+        <p id="msg-senha-status" style="font-size:0.8rem; margin-top:6px; display:none;"></p>
+      </div>
+
     </div>
   </div>
 
 
-  <script src="app.js?v=6.13"></script>
+  <script src="app.js?v=7.0"></script>
 </body>
 </html>
