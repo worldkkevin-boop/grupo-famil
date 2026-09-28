@@ -7,8 +7,10 @@ const crypto   = require('node:crypto');
 const path     = require('path');
 const QRCode   = require('qrcode');
 const webpush  = require('web-push');
+const whatsapp = require('./whatsapp.js');
 
 const app      = express();
+whatsapp.startWhatsApp();
 const PORT            = process.env.PORT             || 4001;
 const BASE_URL        = process.env.BASE_URL         || `http://localhost:${PORT}`;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -837,6 +839,72 @@ app.post('/api/admin/alterar-senha', (req, res) => {
   const hash = hashPassword(nova_senha);
   db.prepare('UPDATE grupos SET senha_hash=? WHERE id=?').run(hash, session.grupo_id);
   res.json({ ok: true, mensagem: 'Senha alterada com sucesso!' });
+});
+
+// ── API: WhatsApp Bot & Automação ─────────────────────────────────────────────
+app.get('/api/admin/whatsapp/status', (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+  res.json(whatsapp.getWhatsAppStatus());
+});
+
+app.post('/api/admin/whatsapp/conectar', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+  await whatsapp.startWhatsApp(true);
+  res.json(whatsapp.getWhatsAppStatus());
+});
+
+app.post('/api/admin/whatsapp/desconectar', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+  await whatsapp.disconnectWhatsApp();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/whatsapp/enviar-teste', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+  const { numero, texto } = req.body;
+  if (!numero || !texto) return res.status(400).json({ erro: 'Informe número e texto' });
+
+  try {
+    const result = await whatsapp.sendWhatsAppMessage(numero, texto);
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// Cobrança 100% Automática via WhatsApp
+app.post('/api/admin/cobrar-automatico', async (req, res) => {
+  const session = getSession(req);
+  if (!session || session.role !== 'admin') return res.status(401).json({ erro: 'Não autorizado' });
+
+  const { membro_id } = req.body;
+  const membro = db.prepare('SELECT id, nome, telefone FROM membros WHERE id=? AND grupo_id=?').get(membro_id, session.grupo_id);
+  if (!membro) return res.status(404).json({ erro: 'Membro não encontrado' });
+  if (!membro.telefone) return res.status(400).json({ erro: 'Membro não possui telefone/WhatsApp cadastrado' });
+
+  const membros = db.prepare('SELECT id, nome, email, telefone, foto_url, ativo FROM membros WHERE grupo_id=?').all(session.grupo_id);
+  const cotas = calcularCotas(membros, session.grupo_id);
+  const cotaMembro = cotas.find(c => c.id === membro.id);
+  const valorCentavos = cotaMembro ? cotaMembro.cota : 0;
+  if (valorCentavos <= 0) return res.status(400).json({ erro: 'Cota zerada ou membro inativo' });
+
+  const grupo = db.prepare('SELECT pix_key, pix_name, pix_city FROM grupos WHERE id=?').get(session.grupo_id);
+  const payloadPix = gerarPix(valorCentavos, grupo || {});
+  const valorStr = (valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const mes = mesAtual();
+
+  const msg = `Olá, ${membro.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (${mes}) está disponível no valor de *${valorStr}*.\n\n🔑 *Chave Pix:*\n${grupo.pix_key || PIX_KEY}\n\n⚡ *Pix Copia e Cola:*\n\`\`\`${payloadPix}\`\`\`\n\nAssim que efetuar o pagamento, me confirma por aqui! Obrigado! 🙌`;
+
+  try {
+    await whatsapp.sendWhatsAppMessage(membro.telefone, msg);
+    res.json({ ok: true, enviado: true, membro: membro.nome, telefone: membro.telefone });
+  } catch (err) {
+    res.status(500).json({ erro: 'Falha no envio automático: ' + err.message });
+  }
 });
 
 // ── Helper para Processar Pagamento SaaS ──────────────────────────────────────

@@ -454,8 +454,33 @@ $('members-grid').addEventListener('click', async e => {
     if (!m) return;
     
     cobrar.disabled = true;
-    cobrar.textContent = 'Gerando...';
+    cobrar.textContent = 'Enviando...';
+
+    // Se WhatsApp automático estiver conectado e membro tiver telefone:
+    if (state.whatsapp && state.whatsapp.status === 'connected' && m.telefone) {
+      try {
+        const resAuto = await fetch('/api/admin/cobrar-automatico', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ membro_id: m.id })
+        });
+        const dataAuto = await resAuto.json();
+        if (!resAuto.ok) throw new Error(dataAuto.erro || 'Falha no disparo');
+        
+        cobrar.textContent = '✅ Enviado!';
+        cobrar.style.background = 'var(--success)';
+        setTimeout(() => {
+          cobrar.textContent = '💬 Cobrar';
+          cobrar.style.background = 'var(--secondary)';
+          cobrar.disabled = false;
+        }, 3000);
+        return;
+      } catch (err) {
+        console.warn('Envio automático falhou, usando fallback:', err);
+      }
+    }
     
+    // Fallback manual (abre o link do WhatsApp com mensagem pronta):
     try {
       const res = await fetch('/api/pix', {
         method: 'POST', headers: getAuthHeaders(),
@@ -466,7 +491,7 @@ $('members-grid').addEventListener('click', async e => {
       
       const valorStr = fmt(m.cota);
       const chavePix = state.pix_key || '01749132222';
-      const msg = `Olá, ${m.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (${mesLabel(state.mes)}) está disponível no valor de *${valorStr}*.\n\n🔑 *Chave Pix (Celular):*\n${chavePix}\n\n⚡ *Pix Copia e Cola:*\n\`\`\`${data.payload}\`\`\`\n\nAssim que efetuar o pagamento, me confirma por aqui! Obrigado! 🙌`;
+      const msg = `Olá, ${m.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (${mesLabel(state.mes)}) está disponível no valor de *${valorStr}*.\n\n🔑 *Chave Pix:*\n${chavePix}\n\n⚡ *Pix Copia e Cola:*\n\`\`\`${data.payload}\`\`\`\n\nAssim que efetuar o pagamento, me confirma por aqui! Obrigado! 🙌`;
       
       let url = '';
       if (m.telefone && m.telefone.replace(/\D/g, '').length >= 10) {
@@ -756,6 +781,10 @@ $('admin-settings-close')?.addEventListener('click', () => $('admin-settings-ove
 $('btn-admin-panel')?.addEventListener('click', (e) => {
   e.preventDefault();
   $('admin-settings-overlay').classList.add('active');
+  checkWhatsAppStatus();
+  if (!waPollTimer) {
+    waPollTimer = setInterval(checkWhatsAppStatus, 2500);
+  }
 });
 
 // Add assinatura
@@ -876,6 +905,88 @@ $('btn-salvar-nova-senha')?.addEventListener('click', async () => {
   } finally {
     btn.textContent = oldText;
   }
+});
+
+// ── WhatsApp Bot UI & Status Polling ──────────────────────────────────────────
+let waPollTimer = null;
+
+async function checkWhatsAppStatus() {
+  if (!state.isAdmin) return;
+  try {
+    const res = await fetch('/api/admin/whatsapp/status', { headers: getAuthHeaders() });
+    const data = await res.json();
+    state.whatsapp = data;
+    renderWhatsAppStatus(data);
+  } catch (err) {}
+}
+
+function renderWhatsAppStatus(data) {
+  const badge = $('wa-status-badge');
+  const qrContainer = $('wa-qr-container');
+  const qrImg = $('wa-qr-img');
+  const connectedContainer = $('wa-connected-container');
+  const connectedPhone = $('wa-connected-phone');
+  const disconnectedActions = $('wa-disconnected-actions');
+
+  if (!badge) return;
+
+  if (data.status === 'connected') {
+    badge.textContent = '🟢 Conectado';
+    badge.style.background = 'rgba(16,185,129,0.2)';
+    badge.style.color = 'var(--success)';
+    if (connectedContainer) connectedContainer.classList.remove('hidden');
+    if (connectedPhone) connectedPhone.textContent = `Número: +${data.phone}`;
+    if (qrContainer) qrContainer.classList.add('hidden');
+    if (disconnectedActions) disconnectedActions.classList.add('hidden');
+    if (waPollTimer) { clearInterval(waPollTimer); waPollTimer = null; }
+  } else if (data.status === 'qr_ready' && data.qr_base64) {
+    badge.textContent = '🟡 Aguardando Leitura';
+    badge.style.background = 'rgba(234,179,8,0.2)';
+    badge.style.color = '#eab308';
+    if (qrContainer) qrContainer.classList.remove('hidden');
+    if (qrImg) qrImg.src = data.qr_base64;
+    if (connectedContainer) connectedContainer.classList.add('hidden');
+    if (disconnectedActions) disconnectedActions.classList.add('hidden');
+  } else if (data.status === 'connecting') {
+    badge.textContent = '⏳ Conectando...';
+    badge.style.background = 'rgba(124,58,237,0.2)';
+    badge.style.color = 'var(--primary-light)';
+    if (connectedContainer) connectedContainer.classList.add('hidden');
+  } else {
+    badge.textContent = '⚪ Desconectado';
+    badge.style.background = 'rgba(255,255,255,0.1)';
+    badge.style.color = 'var(--text-muted)';
+    if (qrContainer) qrContainer.classList.add('hidden');
+    if (connectedContainer) connectedContainer.classList.add('hidden');
+    if (disconnectedActions) disconnectedActions.classList.remove('hidden');
+  }
+}
+
+$('btn-wa-conectar')?.addEventListener('click', async () => {
+  const btn = $('btn-wa-conectar');
+  const oldText = btn.textContent;
+  btn.textContent = 'Iniciando WhatsApp...';
+  btn.disabled = true;
+  try {
+    await fetch('/api/admin/whatsapp/conectar', { method: 'POST', headers: getAuthHeaders() });
+    await checkWhatsAppStatus();
+    if (!waPollTimer) {
+      waPollTimer = setInterval(checkWhatsAppStatus, 2500);
+    }
+  } catch (err) {
+    alert('Erro ao iniciar WhatsApp: ' + err.message);
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+});
+
+$('btn-wa-desconectar')?.addEventListener('click', async () => {
+  if (!confirm('Deseja realmente desconectar o WhatsApp?')) return;
+  try {
+    await fetch('/api/admin/whatsapp/desconectar', { method: 'POST', headers: getAuthHeaders() });
+    checkWhatsAppStatus();
+  } catch (err) {}
 });
 
 // Setup Inicial
