@@ -114,10 +114,16 @@ for (const col of [
   'ALTER TABLE membros ADD COLUMN senha_hash TEXT',
   'ALTER TABLE grupos ADD COLUMN saas_pago_ate TEXT',
   'ALTER TABLE membros ADD COLUMN telefone TEXT',
+  'ALTER TABLE membros ADD COLUMN whatsapp_lid TEXT',
   'ALTER TABLE membros ADD COLUMN push_sub TEXT',
   'ALTER TABLE pagamentos ADD COLUMN comprovante_url TEXT',
   'ALTER TABLE pagamentos ADD COLUMN observacao TEXT',
 ]) { try { db.exec(col); } catch {} }
+
+// Auto vincula LID do Kevin (membro 1) caso ainda não esteja preenchido
+try {
+  db.prepare("UPDATE membros SET whatsapp_lid = '106944702451864' WHERE id = 1 AND (whatsapp_lid IS NULL OR whatsapp_lid = '')").run();
+} catch {}
 
 // Fix do Schema do Config (Migrations)
 try {
@@ -924,17 +930,9 @@ app.post('/api/admin/cobrar-automatico', async (req, res) => {
 // ── WhatsApp Bot: Auto Detecção de Comprovante de Pagamento ───────────────────
 whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
   try {
-    const digits = remoteJid.replace(/\D/g, '');
+    const rawJid = String(remoteJid);
+    const digits = rawJid.replace(/\D/g, '');
     const ultimos8 = digits.slice(-8);
-
-    // Busca se pertence a algum membro ativo cadastrado
-    const membros = db.prepare('SELECT id, nome, grupo_id, telefone FROM membros WHERE ativo=1 AND telefone IS NOT NULL').all();
-    const membro = membros.find(m => String(m.telefone).replace(/\D/g, '').endsWith(ultimos8));
-
-    if (!membro) {
-      console.log(`[WhatsApp Bot] Mensagem recebida de remetente não cadastrado como membro: ${digits}`);
-      return;
-    }
 
     const isImage = Boolean(msg.message?.imageMessage);
     const isDoc   = Boolean(msg.message?.documentMessage);
@@ -945,10 +943,74 @@ whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
       msg.message?.documentMessage?.caption || ''
     ).toLowerCase();
 
-    const isComprovante = isImage || isDoc || /pago|paguei|comprovante|pix feito|mandei|transferi|enviei|ta pago|tá pago|concluido|concluído/.test(texto);
+    const pushName = String(msg.pushName || '').trim();
+    console.log(`[WhatsApp Bot] 📩 Mensagem recebida de ${rawJid} | PushName: "${pushName}" | Mídia: ${isImage ? 'Foto' : (isDoc ? 'Doc' : 'Não')} | Texto: "${texto.slice(0, 60)}"`);
+
+    // Busca todos os membros ativos
+    const membros = db.prepare('SELECT id, nome, grupo_id, telefone, whatsapp_lid FROM membros WHERE ativo=1').all();
+
+    // 1. Tenta achar por whatsapp_lid
+    let membro = membros.find(m => m.whatsapp_lid && (m.whatsapp_lid === digits || rawJid.startsWith(m.whatsapp_lid)));
+
+    // 2. Se não achou por LID e o remetente não for @lid, tenta por telefone
+    if (!membro && !rawJid.endsWith('@lid')) {
+      membro = membros.find(m => m.telefone && String(m.telefone).replace(/\D/g, '').endsWith(ultimos8));
+    }
+
+    // 3. Se for @lid e ainda não foi associado a um membro:
+    if (!membro && rawJid.endsWith('@lid')) {
+      // 3.1. Verifica pelo pushName do WhatsApp
+      if (pushName) {
+        const pLower = pushName.toLowerCase();
+        membro = membros.find(m => {
+          const nLower = m.nome.toLowerCase();
+          const primeiro = nLower.split(' ')[0];
+          return pLower.includes(primeiro) || primeiro.includes(pLower);
+        });
+      }
+
+      // 3.2. Verifica pelo texto do comprovante (ex: comprovante Wise ou Pix que contém o nome do membro)
+      if (!membro && texto) {
+        membro = membros.find(m => {
+          const nLower = m.nome.toLowerCase();
+          const primeiro = nLower.split(' ')[0];
+          return texto.includes(nLower) || (primeiro.length >= 4 && texto.includes(primeiro));
+        });
+      }
+
+      // 3.3. Se ainda não achou, associa aos membros pendentes do mês atual
+      if (!membro) {
+        const mesAtualStr = mesAtual();
+        const pendentes = db.prepare(`
+          SELECT m.* FROM membros m
+          LEFT JOIN pagamentos p ON p.membro_id = m.id AND p.mes_referencia = ? AND p.pago = 1
+          WHERE m.ativo = 1 AND p.id IS NULL
+        `).all(mesAtualStr);
+
+        if (pendentes.length === 1) {
+          membro = pendentes[0];
+        } else if (pendentes.some(p => p.id === 1)) {
+          membro = pendentes.find(p => p.id === 1);
+        }
+      }
+
+      // Vincula o LID permanentemente para as próximas mensagens
+      if (membro) {
+        db.prepare('UPDATE membros SET whatsapp_lid=? WHERE id=?').run(digits, membro.id);
+        console.log(`[WhatsApp Bot] 🔗 Vinculado whatsapp_lid ${digits} ao membro ${membro.nome} (ID: ${membro.id})`);
+      }
+    }
+
+    if (!membro) {
+      console.log(`[WhatsApp Bot] ⚠️ Não foi possível identificar o membro para o remetente: ${rawJid} (${pushName})`);
+      return;
+    }
+
+    // Palavras-chave de pagamento / comprovante
+    const isComprovante = isImage || isDoc || /pago|paguei|comprovante|pix|wise|transferi|enviei|ta pago|tá pago|concluido|concluído|enviar dinheiro/.test(texto);
 
     if (isComprovante) {
-      console.log(`📥 [WhatsApp Bot] Comprovante detectado para o membro: ${membro.nome} (${membro.telefone})`);
+      console.log(`📥 [WhatsApp Bot] ✅ Comprovante confirmado para: ${membro.nome} (ID: ${membro.id})!`);
 
       const mes = mesAtual();
       const row = db.prepare('SELECT id, pago FROM pagamentos WHERE membro_id=? AND mes_referencia=? AND grupo_id=?').get(membro.id, mes, membro.grupo_id);
@@ -961,14 +1023,14 @@ whatsapp.setMessageReceivedCallback(async (msg, remoteJid) => {
 
       console.log(`✅ [WhatsApp Bot] Pagamento do mês ${mes} baixado para ${membro.nome}!`);
 
-      // Envia confirmação automática para o membro
+      // Envia confirmação automática respondendo diretamente na conversa ativa (rawJid)
       const confirmacao = [
         `✅ *Comprovante recebido com sucesso, ${membro.nome}!* 🙌`,
-        `Identifiquei o seu pagamento e a sua assinatura do mês (*${mes}*) já está marcada como *PAGA* no nosso painel.\n\nMuito obrigado! 🚀`
+        `Identifiquei o seu pagamento e a sua fatura da assinatura do mês (*${mes}*) já está marcada como *PAGA* no nosso painel.\n\nMuito obrigado! 🚀`
       ];
-      await whatsapp.sendWhatsAppMessages(membro.telefone, confirmacao);
+      await whatsapp.sendWhatsAppMessages(rawJid, confirmacao);
 
-      // Notifica o administrador do grupo
+      // Notifica o administrador do grupo se for um membro diferente
       try {
         const dono = db.prepare('SELECT dono_email FROM grupos WHERE id=?').get(membro.grupo_id);
         const adminMembro = db.prepare('SELECT telefone FROM membros WHERE grupo_id=? AND email=?').get(membro.grupo_id, dono?.dono_email);

@@ -106,6 +106,11 @@ async function resolveWhatsAppJid(numero) {
     throw new Error('WhatsApp não está conectado.');
   }
 
+  // Se já for um JID completo (incluindo @lid ou @s.whatsapp.net), usa diretamente!
+  if (typeof numero === 'string' && (numero.endsWith('@lid') || numero.endsWith('@s.whatsapp.net'))) {
+    return numero;
+  }
+
   let digits = String(numero).replace(/\D/g, '');
   if (!digits) throw new Error('Número de telefone inválido.');
 
