@@ -112,6 +112,7 @@ for (const col of [
   'ALTER TABLE membros ADD COLUMN senha_hash TEXT',
   'ALTER TABLE grupos ADD COLUMN saas_pago_ate TEXT',
   'ALTER TABLE membros ADD COLUMN telefone TEXT',
+  'ALTER TABLE membros ADD COLUMN push_sub TEXT',
   'ALTER TABLE pagamentos ADD COLUMN comprovante_url TEXT',
   'ALTER TABLE pagamentos ADD COLUMN observacao TEXT',
 ]) { try { db.exec(col); } catch {} }
