@@ -84,21 +84,65 @@ function getWhatsAppStatus() {
   };
 }
 
-async function sendWhatsAppMessage(numero, texto) {
-  if (connectionStatus !== 'connected' || !sock) {
+async function resolveWhatsAppJid(numero) {
+  if (!sock || connectionStatus !== 'connected') {
     throw new Error('WhatsApp não está conectado.');
   }
 
   let digits = String(numero).replace(/\D/g, '');
   if (!digits) throw new Error('Número de telefone inválido.');
 
-  if (!digits.startsWith('55') && digits.length >= 10 && digits.length <= 11) {
+  if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
     digits = '55' + digits;
   }
 
-  const jid = `${digits}@s.whatsapp.net`;
-  await sock.sendMessage(jid, { text: texto });
-  return { ok: true, jid };
+  // Monta candidatos de JID para números do Brasil (55 + DDD + 8 ou 9 dígitos)
+  const candidates = [digits];
+
+  if (digits.startsWith('55')) {
+    if (digits.length === 13) {
+      // Formato com o nono dígito (55 + DDD + 9 + 8 dígitos) -> adiciona alternativa sem o 9 (12 dígitos)
+      const sem9 = digits.slice(0, 4) + digits.slice(5);
+      candidates.push(sem9);
+    } else if (digits.length === 12) {
+      // Formato sem o nono dígito (55 + DDD + 8 dígitos) -> adiciona alternativa com o 9 (13 dígitos)
+      const com9 = digits.slice(0, 4) + '9' + digits.slice(4);
+      candidates.push(com9);
+    }
+  }
+
+  console.log(`🔍 [WhatsApp] Verificando existência na rede para candidatos:`, candidates);
+
+  // Consulta o WhatsApp server para cada candidato
+  for (const cand of candidates) {
+    try {
+      const results = await sock.onWhatsApp(cand);
+      console.log(`[WhatsApp] Consulta onWhatsApp(${cand}):`, JSON.stringify(results));
+      if (results && results.length > 0 && results[0].exists) {
+        console.log(`✅ [WhatsApp] JID oficial confirmado na rede: ${results[0].jid} (candidato: ${cand})`);
+        return results[0].jid;
+      }
+    } catch (err) {
+      console.warn(`⚠️ [WhatsApp] Erro ao consultar onWhatsApp para ${cand}:`, err.message);
+    }
+  }
+
+  const fallback = `${candidates[0]}@s.whatsapp.net`;
+  console.warn(`⚠️ [WhatsApp] Nenhum JID confirmado via onWhatsApp, usando fallback: ${fallback}`);
+  return fallback;
+}
+
+async function sendWhatsAppMessage(numero, texto) {
+  if (connectionStatus !== 'connected' || !sock) {
+    throw new Error('WhatsApp não está conectado.');
+  }
+
+  const targetJid = await resolveWhatsAppJid(numero);
+  console.log(`📤 [WhatsApp] Enviando mensagem para: ${targetJid}`);
+
+  const sent = await sock.sendMessage(targetJid, { text: texto });
+  console.log(`📬 [WhatsApp] Mensagem despachada com sucesso! ID: ${sent?.key?.id}`);
+  return { ok: true, jid: targetJid, keyId: sent?.key?.id };
 }
 
 async function disconnectWhatsApp() {

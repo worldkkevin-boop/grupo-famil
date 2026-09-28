@@ -326,12 +326,22 @@
         </div>
 
         <!-- Container Conectado -->
-        <div id="wa-connected-container" class="hidden" style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); padding:14px; border-radius:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="color:var(--success); font-weight:700; font-size:0.9rem;">✅ WhatsApp Conectado!</div>
-            <div id="wa-connected-phone" style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">Número: --</div>
+        <div id="wa-connected-container" class="hidden" style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); padding:14px; border-radius:10px; margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+              <div style="color:var(--success); font-weight:700; font-size:0.9rem;">✅ WhatsApp Conectado!</div>
+              <div id="wa-connected-phone" style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">Número: --</div>
+            </div>
+            <button id="btn-wa-desconectar" style="padding:6px 12px; border-radius:8px; background:rgba(248,113,113,0.15); color:var(--danger); border:1px solid rgba(248,113,113,0.3); cursor:pointer; font-size:0.8rem; font-weight:600;">Desconectar</button>
           </div>
-          <button id="btn-wa-desconectar" style="padding:6px 12px; border-radius:8px; background:rgba(248,113,113,0.15); color:var(--danger); border:1px solid rgba(248,113,113,0.3); cursor:pointer; font-size:0.8rem; font-weight:600;">Desconectar</button>
+          <div style="border-top: 1px dashed rgba(16,185,129,0.25); padding-top: 10px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 600;">🧪 Testar disparo de mensagem:</div>
+            <div style="display:flex; gap:6px;">
+              <input type="text" id="wa-test-num" placeholder="DDD + Número (ex: 96991767788)" style="flex:1; padding:6px 10px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:#fff; font-size:0.8rem;">
+              <button id="btn-wa-testar" class="btn-main" style="padding:6px 12px; font-size:0.8rem; white-space:nowrap;">Testar</button>
+            </div>
+            <div id="wa-test-status" style="font-size:0.75rem; margin-top:6px; display:none;"></div>
+          </div>
         </div>
 
         <!-- Botão Conectar -->

@@ -477,6 +477,7 @@ $('members-grid').addEventListener('click', async e => {
         return;
       } catch (err) {
         console.warn('Envio automático falhou, usando fallback:', err);
+        alert(`Aviso do Bot WhatsApp: ${err.message}\nAbrindo WhatsApp Web como alternativa.`);
       }
     }
     
@@ -987,6 +988,53 @@ $('btn-wa-desconectar')?.addEventListener('click', async () => {
     await fetch('/api/admin/whatsapp/desconectar', { method: 'POST', headers: getAuthHeaders() });
     checkWhatsAppStatus();
   } catch (err) {}
+});
+
+$('btn-wa-testar')?.addEventListener('click', async () => {
+  const btn = $('btn-wa-testar');
+  const input = $('wa-test-num');
+  const statusDiv = $('wa-test-status');
+  const numero = input?.value.trim();
+
+  if (!numero) {
+    alert('Digite o DDD e o número para testar (ex: 96991767788)');
+    input?.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  if (statusDiv) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.color = 'var(--text-muted)';
+    statusDiv.textContent = 'Validando número e despachando pelo WhatsApp...';
+  }
+
+  try {
+    const res = await fetch('/api/admin/whatsapp/enviar-teste', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        numero,
+        texto: '🤖 *Grupo FAMIl - Teste do Robô*\n\nSeu robô de cobrança automática do WhatsApp está conectado e funcionando perfeitamente! 🚀'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Falha ao enviar teste');
+
+    if (statusDiv) {
+      statusDiv.style.color = 'var(--success)';
+      statusDiv.textContent = `✅ Mensagem enviada com sucesso! JID: ${data.result?.jid || 'OK'}`;
+    }
+  } catch (err) {
+    if (statusDiv) {
+      statusDiv.style.color = 'var(--danger)';
+      statusDiv.textContent = `❌ ${err.message}`;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Testar';
+  }
 });
 
 // Setup Inicial

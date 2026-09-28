@@ -900,9 +900,11 @@ app.post('/api/admin/cobrar-automatico', async (req, res) => {
   const msg = `Olá, ${membro.nome}! 👋\n\nA sua fatura da assinatura familiar deste mês (${mes}) está disponível no valor de *${valorStr}*.\n\n🔑 *Chave Pix:*\n${grupo.pix_key || PIX_KEY}\n\n⚡ *Pix Copia e Cola:*\n\`\`\`${payloadPix}\`\`\`\n\nAssim que efetuar o pagamento, me confirma por aqui! Obrigado! 🙌`;
 
   try {
-    await whatsapp.sendWhatsAppMessage(membro.telefone, msg);
-    res.json({ ok: true, enviado: true, membro: membro.nome, telefone: membro.telefone });
+    const envio = await whatsapp.sendWhatsAppMessage(membro.telefone, msg);
+    console.log(`[Cobrança Auto] ✅ Disparado com sucesso para ${membro.nome} (${membro.telefone}) -> JID: ${envio.jid}`);
+    res.json({ ok: true, enviado: true, membro: membro.nome, telefone: membro.telefone, jid: envio.jid });
   } catch (err) {
+    console.error(`[Cobrança Auto] ❌ Falha ao disparar para ${membro.nome} (${membro.telefone}):`, err);
     res.status(500).json({ erro: 'Falha no envio automático: ' + err.message });
   }
 });
